@@ -1,0 +1,229 @@
+/**
+ * The pet's look, drawn as one line of light (no fill, no shadow). Six looks share one face and
+ * one set of expressions, so every behaviour in Pet.tsx works with any of them (2026-10-26: the
+ * owner likes the ghost and asked for five variations in the same mood).
+ */
+export const PET_VARIANTS: { id: string; label: string; note: string }[] = [
+  { id: 'classic', label: 'いまの子', note: 'まるい頭とまっすぐなすそ。飛ぶとすそが波打つ' },
+  { id: 'drop', label: 'しずく', note: '頭のてっぺんがくるんと巻いたしずく形。向いている方へ先が傾く' },
+  { id: 'ears', label: 'ねこみみ', note: '小さな耳がふたつ。いたずらの時はぴんと立つ' },
+  { id: 'wisp', label: 'ひとだま', note: '下がしっぽになって流れる。歩かずにいつも少し浮いている' },
+  { id: 'sheet', label: 'シーツ', note: 'すそが4つの波、ほっぺにシャシャシャの線、L字の足が2本。足はゆらゆら、歩くと交互に上がる' },
+  { id: 'lantern', label: 'ちょうちん', note: '小さな光の玉を連れている。寝ると玉も足もとで休む' }
+]
+
+export type PetPose = {
+  state: string
+  t: number
+  dir: 1 | -1
+  eyeX: number
+  eyeY: number
+  blink: number
+  jumpY: number
+  flee: boolean
+}
+export type PetInk = { core: string; halo: string }
+
+const BODY = 64
+
+type Geo = { cx: number; bottom: number; bw: number; bh: number; top: number; ey: number; air: boolean; cheeky: boolean; closed: boolean }
+
+function geometry(size: number, p: PetPose, variant: string): Geo {
+  const st = p.state
+  let squash = 1 + Math.sin(p.t * 3) * 0.02
+  if (st === 'walk') squash = 1 + Math.sin(p.t * 12) * 0.05
+  if (st === 'sleep') squash = 0.9 + Math.sin(p.t * 2) * 0.02
+  if (st === 'perch') squash = 0.94 + Math.sin(p.t * 2.5) * 0.015
+  if (st === 'stretch') { const k = Math.sin(Math.min(1, (p.t % 1.8) / 1.8) * Math.PI); squash = 1 + 0.28 * k }
+  const air = st === 'fly' || st === 'hover'
+  if (air) squash = 1.06 + Math.sin(p.t * 5) * 0.03
+  const scale = variant === 'lantern' ? 0.88 : variant === 'wisp' ? 0.92 : 1
+  const bw = BODY * scale * (2 - squash), bh = BODY * scale * squash
+  // the wisp never quite touches the ground
+  const float = variant === 'wisp' && !air && st !== 'sleep' ? 8 + Math.sin(p.t * 2.2) * 2 : 0
+  const bob = air ? Math.sin(p.t * 4) * 4 : 0
+  // the wisp floats higher; the sheet stands on its legs
+  const bottom = size - 8 + p.jumpY + bob - float - (variant === 'wisp' ? 14 : variant === 'sheet' ? 12 : 0)
+  return {
+    cx: size / 2, bottom, bw, bh, top: bottom - bh * 0.85, ey: bottom - bh * 0.55 + p.eyeY, air,
+    cheeky: st === 'tease' || p.flee,
+    closed: st === 'sleep' || st === 'stretch' || st === 'yawn' || p.blink > 0
+  }
+}
+
+/** A row of soft waves from (x0, y) leftwards to (x1, y). */
+function hem(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, n: number, amp: number, t: number, moving: boolean) {
+  const w = (x0 - x1) / n
+  for (let i = 0; i < n; i++) {
+    const a = x0 - i * w
+    const wob = moving ? Math.sin(t * 8 + i) * 2 : 0
+    ctx.quadraticCurveTo(a - w / 2, y + amp + wob, a - w, y)
+  }
+}
+
+function dome(ctx: CanvasRenderingContext2D, g: Geo, lift = 1.1) {
+  ctx.moveTo(g.cx - g.bw / 2, g.bottom)
+  ctx.bezierCurveTo(g.cx - g.bw / 2, g.bottom - g.bh * lift, g.cx + g.bw / 2, g.bottom - g.bh * lift, g.cx + g.bw / 2, g.bottom)
+}
+
+function body(ctx: CanvasRenderingContext2D, variant: string, g: Geo, p: PetPose) {
+  const { cx, bottom, bw, bh, top, air, cheeky } = g
+  ctx.beginPath()
+  switch (variant) {
+    case 'drop': {
+      const tipX = cx + p.dir * 6, tipY = bottom - bh * 1.22
+      ctx.moveTo(cx - bw / 2, bottom)
+      ctx.bezierCurveTo(cx - bw / 2, bottom - bh * 0.72, cx - bw * 0.16, bottom - bh * 1.02, tipX, tipY)
+      ctx.bezierCurveTo(cx + bw * 0.16, bottom - bh * 1.02, cx + bw / 2, bottom - bh * 0.72, cx + bw / 2, bottom)
+      hem(ctx, cx + bw / 2, cx - bw / 2, bottom, air ? 3 : 2, air ? 5 : 3, p.t, air)
+      ctx.stroke()
+      // the curl at the tip, swinging a little
+      const sw = Math.sin(p.t * 3) * 2
+      ctx.beginPath()
+      ctx.moveTo(tipX, tipY)
+      ctx.quadraticCurveTo(tipX + p.dir * (9 + sw), tipY - 7, tipX + p.dir * (13 + sw), tipY + 1)
+      ctx.stroke()
+      return
+    }
+    case 'ears': {
+      const perk = cheeky ? -4 : Math.sin(p.t * 1.7) > 0.96 ? -2 : 0
+      ctx.moveTo(cx - bw / 2, bottom)
+      ctx.bezierCurveTo(cx - bw / 2, bottom - bh * 0.55, cx - bw * 0.46, top + 7, cx - bw * 0.31, top + 3)
+      ctx.quadraticCurveTo(cx - bw * 0.34, top - 6, cx - bw * 0.29, top - 12 + perk)
+      ctx.quadraticCurveTo(cx - bw * 0.21, top - 6, cx - bw * 0.13, top + 0.5)
+      ctx.quadraticCurveTo(cx, top - 2, cx + bw * 0.13, top + 0.5)
+      ctx.quadraticCurveTo(cx + bw * 0.21, top - 6, cx + bw * 0.29, top - 12 + perk)
+      ctx.quadraticCurveTo(cx + bw * 0.34, top - 6, cx + bw * 0.31, top + 3)
+      ctx.bezierCurveTo(cx + bw * 0.46, top + 7, cx + bw / 2, bottom - bh * 0.55, cx + bw / 2, bottom)
+      if (air) hem(ctx, cx + bw / 2, cx - bw / 2, bottom, 3, 5, p.t, true)
+      else ctx.quadraticCurveTo(cx, bottom + 3, cx - bw / 2, bottom)
+      ctx.stroke()
+      return
+    }
+    case 'wisp': {
+      // a round head whose lower edge flows into one tail behind it
+      // drawn for a tail trailing to the left, mirrored when the pet faces left
+      const sway = Math.sin(p.t * 3.2) * 4
+      const m = (x: number) => cx + (x - cx) * p.dir // mirror around the centre when facing left
+      const tx = cx - bw * 0.62 + sway * 0.4, ty = bottom + 18 + sway * 0.5
+      ctx.moveTo(m(cx - bw / 2), bottom)
+      ctx.bezierCurveTo(m(cx - bw / 2), bottom - bh * 1.1, m(cx + bw / 2), bottom - bh * 1.1, m(cx + bw / 2), bottom)
+      // the lower edge sweeps back into a long tail with a small upward flick at the tip
+      ctx.bezierCurveTo(m(cx + bw / 2), bottom + 16, m(cx - bw * 0.1), bottom + 20, m(tx), ty)
+      ctx.quadraticCurveTo(m(tx - 9), ty + 1, m(tx - 12), ty - 6)
+      ctx.quadraticCurveTo(m(tx - 4), ty - 4, m(cx - bw * 0.35), bottom + 4)
+      ctx.quadraticCurveTo(m(cx - bw * 0.48), bottom + 2, m(cx - bw / 2), bottom)
+      ctx.stroke()
+      return
+    }
+    case 'sheet': {
+      dome(ctx, g, 1.14)
+      hem(ctx, cx + bw / 2, cx - bw / 2, bottom, 4, air ? 5 : 3.5, p.t, air)
+      ctx.stroke()
+      // two L-shaped legs under the hem: they sway gently, step in turn when walking, dangle in the air
+      const walk = p.state === 'walk'
+      const asleep = p.state === 'sleep'
+      const speed = walk ? 12 : air ? 4.5 : 2.2
+      const amp = asleep ? 0 : walk ? 2.6 : air ? 3.2 : 1.3
+      for (const [i, side] of [[0, -1], [1, 1]] as const) {
+        const phase = i ? Math.PI : 0
+        const swing = Math.sin(p.t * speed + phase) * amp
+        const lift = walk ? Math.max(0, Math.sin(p.t * speed + phase)) * 3 : 0
+        const x0 = cx + side * 10, y0 = bottom + 2
+        const x1 = x0 + swing, y1 = bottom + 12 - lift
+        ctx.beginPath()
+        ctx.moveTo(x0, y0)
+        ctx.quadraticCurveTo(x0 + swing * 0.2, (y0 + y1) / 2, x1, y1)
+        ctx.lineTo(x1 + p.dir * 5, y1)
+        ctx.stroke()
+      }
+      return
+    }
+    case 'lantern':
+    case 'classic':
+    default: {
+      dome(ctx, g)
+      if (air) hem(ctx, cx + bw / 2, cx - bw / 2, bottom, 3, 5, p.t, true)
+      else ctx.quadraticCurveTo(cx, bottom + 3, cx - bw / 2, bottom)
+      ctx.stroke()
+    }
+  }
+}
+
+/** Blush: three short slanted strokes on each cheek, floating a little and poking out past the body's edge. */
+function cheeks(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
+  const float = Math.sin(p.t * 2.4) * 0.8
+  const y = g.ey + 7 + float
+  for (const side of [-1, 1]) {
+    const c = g.cx + side * (g.bw / 2 - 5) + p.dir * 1
+    for (const dx of [-5, 0, 5]) {
+      ctx.beginPath()
+      ctx.moveTo(c + dx - 2.2, y + 3.4)
+      ctx.lineTo(c + dx + 2.2, y - 3.4)
+      ctx.stroke()
+    }
+  }
+}
+
+function face(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
+  const { cx, ey, closed, cheeky } = g
+  const ex = cx + p.eyeX + p.dir * 4
+  const st = p.state
+  for (const off of [-11, 11]) {
+    ctx.beginPath()
+    if (cheeky) { const d = off < 0 ? 1 : -1; ctx.moveTo(ex + off - 4 * d, ey - 4); ctx.lineTo(ex + off + 3 * d, ey); ctx.lineTo(ex + off - 4 * d, ey + 4) }
+    else if (closed) { ctx.moveTo(ex + off - 5, ey); ctx.quadraticCurveTo(ex + off, st === 'stretch' ? ey - 4 : ey + 4, ex + off + 5, ey) }
+    else { ctx.moveTo(ex + off, ey - 4); ctx.lineTo(ex + off, ey + 4) }
+    ctx.stroke()
+  }
+  ctx.beginPath()
+  const mx = cx + p.dir * 4
+  if (st === 'sleep') ctx.arc(mx, ey + 14, 2.5, 0, Math.PI * 2)
+  else if (st === 'yawn') { const o = 3 + 5 * Math.sin(Math.min(1, (p.t % 1.6) / 1.6) * Math.PI); ctx.ellipse(mx, ey + 15, 4, o, 0, 0, Math.PI * 2) }
+  else if (cheeky) { ctx.moveTo(mx - 7, ey + 11); ctx.quadraticCurveTo(mx, ey + 19, mx + 7, ey + 11) }
+  else { ctx.moveTo(mx - 5, ey + 12); ctx.quadraticCurveTo(mx, ey + 16, mx + 5, ey + 12) }
+  ctx.stroke()
+}
+
+/** The lantern's little light: floats beside the pet on the side it faces; rests at its feet when asleep. */
+function lanternOrb(g: Geo, p: PetPose): { x: number; y: number } {
+  if (p.state === 'sleep') return { x: g.cx + p.dir * (g.bw / 2 + 8), y: g.bottom - 3 }
+  return { x: g.cx + p.dir * (g.bw / 2 + 14) + Math.sin(p.t * 1.3) * 3, y: g.bottom - g.bh * 0.7 + Math.sin(p.t * 2.1) * 5 }
+}
+
+/** Draws the pet at the centre bottom of a size x size canvas (already cleared and scaled). */
+export function drawPet(ctx: CanvasRenderingContext2D, size: number, variant: string, p: PetPose, ink: PetInk, breath: number, k: number): void {
+  const g = geometry(size, p, variant)
+  const lines = () => { body(ctx, variant, g, p); face(ctx, g, p); if (variant === 'sheet') cheeks(ctx, g, p) }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+  // halo (breathes with every other widget), then the thin core line
+  ctx.globalAlpha = breath
+  ctx.strokeStyle = ink.halo; ctx.lineWidth = 3; ctx.shadowColor = ink.halo; ctx.shadowBlur = 14 * Math.min(1.2, k)
+  lines()
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0
+  ctx.strokeStyle = ink.core; ctx.lineWidth = 1.8
+  lines()
+  if (variant === 'lantern') {
+    const o = lanternOrb(g, p)
+    const dim = p.state === 'sleep' ? 0.45 : 1
+    ctx.fillStyle = ink.core; ctx.shadowColor = ink.halo
+    ctx.globalAlpha = dim * (0.6 + 0.4 * breath); ctx.shadowBlur = 18
+    ctx.beginPath(); ctx.arc(o.x, o.y, 4.2, 0, Math.PI * 2); ctx.fill()
+    ctx.globalAlpha = dim; ctx.shadowBlur = 6
+    ctx.beginPath(); ctx.arc(o.x, o.y, 2.4, 0, Math.PI * 2); ctx.fill()
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0
+  }
+  if (p.state === 'sleep') {
+    ctx.fillStyle = ink.core; ctx.font = '400 15px "Zen Kurenaido", sans-serif'
+    ctx.shadowColor = ink.halo; ctx.shadowBlur = 8
+    const z = (p.t % 2) / 2
+    ctx.globalAlpha = 1 - z; ctx.fillText('z', g.cx + 26, g.top - 6 - z * 18); ctx.globalAlpha = 1
+    ctx.shadowBlur = 0
+  }
+}
+
+/** Where the trail of light starts (under the body), for the flying trail in Pet.tsx. */
+export function trailOrigin(size: number, p: PetPose, variant: string): { x: number; y: number } {
+  const g = geometry(size, p, variant)
+  return { x: g.cx, y: g.bottom - 6 }
+}

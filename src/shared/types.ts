@@ -42,7 +42,7 @@ export type Config = {
   tasks: { vaultTaskFile: string; daysAhead: number; style?: number }
   battery: { refreshSeconds: number }
   usage: { refreshMinutes: number; hidden?: string[] }
-  pet: { phrases: string[]; wakePhrase: string }
+  pet: { phrases: string[]; wakePhrase: string; variant?: number }
 }
 
 export type ThemeInfo = { dark: boolean; light: boolean; accent: string }

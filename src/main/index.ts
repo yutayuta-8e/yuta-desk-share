@@ -3,6 +3,9 @@ import { app, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { GLYPHS, GLYPH_NUMBERS } from '../shared/glyphs'
+
+/** Labels of the pet looks (same order as renderer/src/light/petDraw.ts PET_VARIANTS). */
+const PET_LOOKS = ['いまの子', 'しずく', 'ねこみみ', 'ひとだま', 'シーツ', 'ちょうちん']
 import { loadConfig, getConfig, updateConfig } from './config'
 import { registerWallpaperScheme, startWallpaperService, wallpaperEvents, getWallpaperInfo } from './wallpaper'
 import { startThemeService, themeEvents } from './theme'
@@ -166,6 +169,13 @@ function registerMenus(): void {
   registerContextMenuExtras('calendar', (): MenuItemConstructorOptions[] => [
     { label: isConnected() ? 'Google に再接続' : 'Google カレンダーに接続', click: () => void connectGoogle().then(() => pushCalendar()) },
     { label: '今すぐ更新', click: () => void pushCalendar() }
+  ])
+  registerContextMenuExtras('pet', (): MenuItemConstructorOptions[] => [
+    { label: '見た目', submenu: PET_LOOKS.map((label, i) => ({
+      label, type: 'radio' as const, checked: (getConfig().pet.variant ?? 0) === i,
+      click: () => { const c = updateConfig((cfg) => { cfg.pet.variant = i }); broadcast('config', c) }
+    })) },
+    { type: 'separator' }
   ])
   registerContextMenuExtras('battery', (): MenuItemConstructorOptions[] => [{ label: '今すぐ更新', click: () => void pushBattery() }])
   registerContextMenuExtras('usage', (): MenuItemConstructorOptions[] => [{ label: '今すぐ更新', click: () => void pushUsage() }])

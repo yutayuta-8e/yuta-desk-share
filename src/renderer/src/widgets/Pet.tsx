@@ -5,6 +5,7 @@ import type { Bounds, PetState, WidgetId } from '@shared/types'
 import { TEST_BG, TestUnderlay } from '../light/testBg'
 import { timeOfDay } from '../light/timeOfDay'
 import { hmNow } from '../light/clockTime'
+import { PET_VARIANTS, drawPet, trailOrigin } from '../light/petDraw'
 
 /**
  * The pet: a little creature drawn as one line of light. Its look is provisional (the owner will
@@ -21,6 +22,8 @@ import { hmNow } from '../light/clockTime'
  */
 const SIZE = 160
 const BODY = 64
+/** Debug only: ?petvariant=ears shows that look regardless of the config. */
+const DEBUG_VARIANT = new URLSearchParams(location.search).get('petvariant')
 const WALK = 38 // px/s
 const FLY = 150 // px/s
 const PHRASES = ['やっほ〜', 'ねむい…', 'おつかれ！', 'なでて？', '…？', 'がんばろ', 'ひま〜']
@@ -60,6 +63,9 @@ export function Pet() {
   const [testPos, setTestPos] = useState<{ x: number; y: number } | null>(null)
   const bubbleTimer = useRef<number | null>(null)
   const sayRef = useRef<(t: string, ms?: number) => void>(() => {})
+  // the look can change from the menu without restarting the animation loop
+  const variantRef = useRef('classic')
+  variantRef.current = DEBUG_VARIANT ?? PET_VARIANTS[cfg?.pet.variant ?? 0]?.id ?? 'classic'
 
   const say = (t: string, ms = 1800) => {
     setBubble(t)
@@ -275,7 +281,7 @@ export function Pet() {
     readInk()
     const inkTimer = window.setInterval(readInk, 3000)
 
-    /** The pet is a single line of light: an outline, two eyes and a mouth. No fill, no shadow. */
+    /** The pet is a single line of light (see light/petDraw.ts for the six looks). */
     const draw = (s: Sim) => {
       const c = canvas.current
       if (!c) return
@@ -284,76 +290,23 @@ export function Pet() {
       if (c.width !== SIZE * dpr) { c.width = SIZE * dpr; c.height = SIZE * dpr }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, SIZE, SIZE)
-      const st = s.state
-      let squash = 1 + Math.sin(s.t * 3) * 0.02
-      if (st === 'walk') squash = 1 + Math.sin(s.t * 12) * 0.05
-      if (st === 'sleep') squash = 0.9 + Math.sin(s.t * 2) * 0.02
-      if (st === 'perch') squash = 0.94 + Math.sin(s.t * 2.5) * 0.015
-      if (st === 'stretch') { const k = Math.sin(Math.min(1, (s.t % 1.8) / 1.8) * Math.PI); squash = 1 + 0.28 * k }
-      if (st === 'fly' || st === 'hover') squash = 1.06 + Math.sin(s.t * 5) * 0.03
-      const bw = BODY * (2 - squash), bh = BODY * squash
-      const bob = st === 'fly' || st === 'hover' ? Math.sin(s.t * 4) * 4 : 0
-      const cx = SIZE / 2, bottom = SIZE - 8 + s.jumpY + bob
       const phase = (Date.now() % 6000) / 6000
       const k = timeOfDay().k
       const breath = Math.min(1, (0.45 + 0.55 * (1 - Math.cos(phase * Math.PI * 2)) / 2) * Math.min(1.15, k))
-      const ey = bottom - bh * 0.55 + s.eyeY, ex = cx + s.eyeX + s.dir * 4
-      const closed = st === 'sleep' || st === 'stretch' || st === 'yawn' || s.blink > 0
-      const cheeky = st === 'tease' || s.flee
-      const lines = () => {
-        ctx.beginPath()
-        ctx.moveTo(cx - bw / 2, bottom)
-        ctx.bezierCurveTo(cx - bw / 2, bottom - bh * 1.1, cx + bw / 2, bottom - bh * 1.1, cx + bw / 2, bottom)
-        if (st === 'fly' || st === 'hover') {
-          // a wavy hem while floating
-          const w = bw / 3
-          for (let i = 0; i < 3; i++) {
-            const x0 = cx + bw / 2 - i * w
-            ctx.quadraticCurveTo(x0 - w / 2, bottom + 5 + Math.sin(s.t * 8 + i) * 2, x0 - w, bottom)
-          }
-        } else ctx.quadraticCurveTo(cx, bottom + 3, cx - bw / 2, bottom)
-        ctx.stroke()
-        for (const off of [-11, 11]) {
-          ctx.beginPath()
-          if (cheeky) { const d = off < 0 ? 1 : -1; ctx.moveTo(ex + off - 4 * d, ey - 4); ctx.lineTo(ex + off + 3 * d, ey); ctx.lineTo(ex + off - 4 * d, ey + 4) }
-          else if (closed) { ctx.moveTo(ex + off - 5, ey); ctx.quadraticCurveTo(ex + off, st === 'stretch' ? ey - 4 : ey + 4, ex + off + 5, ey) }
-          else { ctx.moveTo(ex + off, ey - 4); ctx.lineTo(ex + off, ey + 4) }
-          ctx.stroke()
-        }
-        ctx.beginPath()
-        const mx = cx + s.dir * 4
-        if (st === 'sleep') ctx.arc(mx, ey + 14, 2.5, 0, Math.PI * 2)
-        else if (st === 'yawn') { const o = 3 + 5 * Math.sin(Math.min(1, (s.t % 1.6) / 1.6) * Math.PI); ctx.ellipse(mx, ey + 15, 4, o, 0, 0, Math.PI * 2) }
-        else if (cheeky) { ctx.moveTo(mx - 7, ey + 11); ctx.quadraticCurveTo(mx, ey + 19, mx + 7, ey + 11) }
-        else { ctx.moveTo(mx - 5, ey + 12); ctx.quadraticCurveTo(mx, ey + 16, mx + 5, ey + 12) }
-        ctx.stroke()
-      }
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+      const variant = variantRef.current
       // a fading trail of light while flying
       if (s.trail.length) {
+        const o = trailOrigin(SIZE, s, variant)
         ctx.fillStyle = ink.halo
-        s.trail.forEach((p, i) => {
-          const tx = cx + (p.x - s.x), ty = bottom - 6 + (p.y - s.y)
+        s.trail.forEach((pt, i) => {
+          const tx = o.x + (pt.x - s.x), ty = o.y + (pt.y - s.y)
           if (tx < 0 || tx > SIZE || ty < 0 || ty > SIZE) return
           ctx.globalAlpha = (i + 1) / s.trail.length * 0.5 * breath
           ctx.beginPath(); ctx.arc(tx, ty, 1.6, 0, Math.PI * 2); ctx.fill()
         })
         ctx.globalAlpha = 1
       }
-      // halo (breathes with every other widget), then the thin core line
-      ctx.globalAlpha = breath
-      ctx.strokeStyle = ink.halo; ctx.lineWidth = 3; ctx.shadowColor = ink.halo; ctx.shadowBlur = 14 * Math.min(1.2, k)
-      lines()
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0
-      ctx.strokeStyle = ink.core; ctx.lineWidth = 1.8
-      lines()
-      if (st === 'sleep') {
-        ctx.fillStyle = ink.core; ctx.font = '400 15px "Zen Kurenaido", sans-serif'
-        ctx.shadowColor = ink.halo; ctx.shadowBlur = 8
-        const z = (s.t % 2) / 2
-        ctx.globalAlpha = 1 - z; ctx.fillText('z', cx + 26, bottom - bh - 6 - z * 18); ctx.globalAlpha = 1
-        ctx.shadowBlur = 0
-      }
+      drawPet(ctx, SIZE, variant, s, ink, breath, k)
     }
 
     const step = (now: number) => {
