@@ -13,6 +13,15 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 function eventDay(e: CalendarEvent): string { return e.allDay ? e.start.slice(0, 10) : ymd(new Date(e.start)) }
+/** "10/28(水) 14:00", "今日 23:30", "明日 終日" */
+function whenLabel(e: CalendarEvent, now: Date): string {
+  const d = e.allDay ? new Date(e.start.slice(0, 10) + 'T00:00:00') : new Date(e.start)
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const day0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const diff = Math.round((day0 - today0) / 86400000)
+  const day = diff <= 0 ? '今日' : diff === 1 ? '明日' : `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})`
+  return `${day} ${e.allDay ? '終日' : hm(e.start)}`
+}
 function hm(iso: string): string { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
 
 /** Month view: days are soft points of text, today is a breathing ring, events are tiny lights. */
@@ -20,7 +29,8 @@ export function Calendar() {
   const data = useFeed(get, on)
   const now = useNow(60_000)
   const [cursor, setCursor] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1))
-  const [sel, setSel] = useState(() => ymd(now))
+  // null = the next few events; a day = that day's events (click the same day again to go back)
+  const [sel, setSel] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [msg, setMsg] = useState('')
   const host = useRef<HTMLDivElement>(null)
@@ -64,8 +74,15 @@ export function Calendar() {
     return Array.from({ length: n }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
   }, [cursor])
   const today = ymd(now)
-  const selEvents = byDay.get(sel) ?? []
-  const away = cursor.getFullYear() !== now.getFullYear() || cursor.getMonth() !== now.getMonth() || sel !== today
+  const selEvents = sel ? byDay.get(sel) ?? [] : []
+  // the next three events in the coming two weeks (still running or yet to start)
+  const upcoming = useMemo(() => {
+    const t = now.getTime(), limit = t + 14 * 86400000
+    const startOf = (e: CalendarEvent) => (e.allDay ? new Date(e.start.slice(0, 10) + 'T00:00:00').getTime() : new Date(e.start).getTime())
+    const endOf = (e: CalendarEvent) => (e.allDay ? new Date((e.end || e.start).slice(0, 10) + 'T00:00:00').getTime() + (e.end && e.end.slice(0, 10) !== e.start.slice(0, 10) ? 0 : 86400000) : new Date(e.end || e.start).getTime())
+    return (data?.events ?? []).filter((e) => endOf(e) > t && startOf(e) < limit).sort((a, b) => startOf(a) - startOf(b)).slice(0, 3)
+  }, [data, now])
+  const away = cursor.getFullYear() !== now.getFullYear() || cursor.getMonth() !== now.getMonth() || sel !== null
   const move = (n: number) => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1))
   const connect = async () => {
     setConnecting(true); setMsg('ブラウザで Google にログインしてください')
@@ -82,7 +99,7 @@ export function Calendar() {
           <div className="nav">
             <button onClick={() => move(-1)} aria-label="前の月">‹</button>
             {/* back to this month and today; shown only after moving away from it */}
-            {away && <button className="back" onClick={() => { setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); setSel(today) }}>今日に戻る</button>}
+            {away && <button className="back" onClick={() => { setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); setSel(null) }}>今日に戻る</button>}
             <button onClick={() => move(1)} aria-label="次の月">›</button>
           </div>
         </div>
@@ -93,7 +110,7 @@ export function Calendar() {
             if (d.getMonth() !== cursor.getMonth()) return <span key={k} />
             const evs = byDay.get(k)?.length ?? 0
             return (
-              <span key={k} className={`day lt-soft ${k === today ? 'today' : ''} ${k === sel ? 'sel' : ''}`} onClick={() => setSel(k)}>
+              <span key={k} className={`day lt-soft ${k === today ? 'today' : ''} ${k === sel ? 'sel' : ''}`} onClick={() => setSel((cur) => (cur === k ? null : k))}>
                 {d.getDate()}
                 {evs > 0 && <i className="ev" />}
               </span>
@@ -101,9 +118,13 @@ export function Calendar() {
           })}
         </div>
         <div className="events">
-          {selEvents.slice(0, 6).map((e) => (
-            <div key={e.id} className="row"><span className="tm">{e.allDay ? '終日' : hm(e.start)}</span><Glow>{e.title}</Glow></div>
-          ))}
+          {sel
+            ? selEvents.slice(0, 6).map((e) => (
+                <div key={e.id} className="row"><span className="tm">{e.allDay ? '終日' : hm(e.start)}</span><Glow>{e.title}</Glow></div>
+              ))
+            : upcoming.map((e) => (
+                <div key={e.id} className="row upcoming"><span className="when">{whenLabel(e, now)}</span><Glow>{e.title}</Glow></div>
+              ))}
         </div>
         {canConnect && (
           <div className="connect">

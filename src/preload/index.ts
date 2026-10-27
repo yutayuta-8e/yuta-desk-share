@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BatteryInfo, Bounds, CalendarData, Config, LauncherIcon, TaskList, ThemeInfo, UsageData, WallpaperInfo, WidgetId } from '../shared/types'
+import type { BatteryInfo, Bounds, CalendarData, Config, LauncherIcon, MediaState, TaskList, ThemeInfo, UsageData, WallpaperInfo, WidgetId } from '../shared/types'
 
 type Listener<T> = (payload: T) => void
 function on<T>(channel: string, fn: Listener<T>): () => void {
@@ -20,6 +20,17 @@ const api = {
   getTasks: (): Promise<TaskList> => ipcRenderer.invoke('get-tasks'),
   taskDone: (title: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('task-done', title),
   getUsage: (): Promise<UsageData> => ipcRenderer.invoke('get-usage'),
+  getMedia: (): Promise<MediaState> => ipcRenderer.invoke('get-media'),
+  taskFormOpen: (mode: 'add' | 'edit', task?: { title: string; due: string | null }) => ipcRenderer.send('task-form-open', mode, task),
+  taskFormClose: () => ipcRenderer.send('task-form-close'),
+  taskAdd: (d: { content: string; due: string | null }): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('task-add', d),
+  taskEdit: (title: string, d: { content: string; due: string | null }): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('task-edit', title, d),
+  taskDelete: (title: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('task-delete', title),
+  taskTrash: (): Promise<{ content: string; due: string | null; deleted: string; days_left: number }[]> => ipcRenderer.invoke('task-trash'),
+  taskRestore: (content: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('task-restore', content),
+  mediaCommand: (cmd: 'toggle' | 'next' | 'prev' | 'close') => ipcRenderer.send('media-command', cmd),
+  mediaSoundCloud: () => ipcRenderer.send('media-soundcloud'),
+  onMedia: (fn: Listener<MediaState>) => on('media', fn),
   getIcon: (path: string, icon?: string): Promise<LauncherIcon> => ipcRenderer.invoke('get-icon', path, icon),
   launch: (path: string, args?: string): Promise<string> => ipcRenderer.invoke('launch', path, args),
   getCalendar: (): Promise<CalendarData> => ipcRenderer.invoke('get-calendar'),

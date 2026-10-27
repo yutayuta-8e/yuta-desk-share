@@ -1,6 +1,6 @@
-export type WidgetId = 'clock' | 'calendar' | 'tasks' | 'battery' | 'usage' | 'launcher' | 'pet'
+export type WidgetId = 'clock' | 'calendar' | 'tasks' | 'battery' | 'usage' | 'launcher' | 'pet' | 'media'
 
-export const WIDGET_IDS: WidgetId[] = ['clock', 'calendar', 'tasks', 'battery', 'usage', 'launcher', 'pet']
+export const WIDGET_IDS: WidgetId[] = ['clock', 'calendar', 'tasks', 'battery', 'usage', 'launcher', 'media', 'pet']
 
 export const WIDGET_LABELS: Record<WidgetId, string> = {
   clock: '時計',
@@ -9,7 +9,8 @@ export const WIDGET_LABELS: Record<WidgetId, string> = {
   battery: 'バッテリー',
   usage: 'AI usage',
   launcher: 'ランチャー',
-  pet: 'ペット'
+  pet: 'ペット',
+  media: '再生中'
 }
 
 export type WidgetConfig = {
@@ -42,7 +43,9 @@ export type Config = {
   tasks: { vaultTaskFile: string; daysAhead: number; style?: number }
   battery: { refreshSeconds: number }
   usage: { refreshMinutes: number; hidden?: string[] }
-  pet: { phrases: string[]; wakePhrase: string; variant?: number }
+  pet: { phrases: string[]; wakePhrase: string; variant?: number; face?: number }
+  /** what the media widget's SoundCloud entrance plays (an embeddable SoundCloud address) */
+  media?: { soundcloudUrl?: string }
 }
 
 export type ThemeInfo = { dark: boolean; light: boolean; accent: string }
@@ -94,8 +97,29 @@ export type UsageService = {
   fiveHour: UsageWindow | null
   sevenDay: UsageWindow | null
   message?: string
+  /** when the numbers were taken (ms); older numbers are marked in the widget */
+  asOf?: number
 }
 export type UsageData = { services: UsageService[]; updatedAt: number }
+
+/** What is playing: an app reported by Windows, yuta-desk's own SoundCloud player, or nothing. */
+export type MediaState = { kind: 'idle' } | {
+  kind: 'app' | 'soundcloud'
+  app?: string
+  status: 'Playing' | 'Paused'
+  title: string
+  artist: string
+  /** data: URL or https URL, shown as is */
+  thumbnail: string | null
+  /** seconds, as of updatedAt (ms) */
+  position: number
+  duration: number
+  updatedAt: number
+  canNext: boolean
+  canPrev: boolean
+  /** the playing app's own icon (data: URL), shown on the thumbnail's corner */
+  appIcon?: string | null
+}
 
 export type LauncherIcon = { path: string; dataUrl: string | null }
 

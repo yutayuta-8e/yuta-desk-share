@@ -1,11 +1,13 @@
 import './boot'
-import { app, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron'
+import { app, ipcMain, Menu, powerMonitor, type MenuItemConstructorOptions } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { GLYPHS, GLYPH_NUMBERS } from '../shared/glyphs'
 
 /** Labels of the pet looks (same order as renderer/src/light/petDraw.ts PET_VARIANTS). */
 const PET_LOOKS = ['いまの子', 'しずく', 'ねこみみ', 'ひとだま', 'シーツ', 'ちょうちん']
+/** Same order as PET_FACES in renderer/src/light/petDraw.ts. */
+const PET_FACE_LABELS = ['いまの顔（たて線の目）', 'まんまる目＋ちいさな口', 'にこにこ目＋あいた口', 'てん目＋ω口', 'きらきら目＋おちょぼ口', 'たれ目＋にょろ口']
 import { loadConfig, getConfig, updateConfig } from './config'
 import { registerWallpaperScheme, startWallpaperService, wallpaperEvents, getWallpaperInfo } from './wallpaper'
 import { startThemeService, themeEvents } from './theme'
@@ -14,7 +16,9 @@ import { raiseOnDesktop } from './desktopLayer'
 import { startCatcher, stopCatcher } from './catcher'
 import { createTray, refreshTray } from './tray'
 import { readBattery } from './services/battery'
-import { readTasks, startTaskWatcher, taskEvents, markTaskDone } from './services/tasks'
+import { readTasks, startTaskWatcher, taskEvents, markTaskDone, addTask, editTask, deleteTask, listTrash, restoreTask, type TaskDraft } from './services/tasks'
+import { openTaskForm, closeTaskForm } from './taskForm'
+import { startMediaService, stopMediaService, mediaEvents, getMediaState, mediaCommand, playSoundCloud } from './services/media'
 import { readUsage } from './services/usage'
 import { getIcon, launch } from './services/launcher'
 import { readCalendar, connectGoogle, hasCredentials, isConnected } from './services/calendar'
@@ -67,8 +71,13 @@ function startServices(): void {
   wallpaperEvents.on('changed', (info) => broadcast('wallpaper', info))
   themeEvents.on('changed', (t) => broadcast('theme', t))
   taskEvents.on('changed', (t) => broadcast('tasks', t))
+  startMediaService()
+  mediaEvents.on('changed', (m) => getWindow('media')?.webContents.send('media', m))
   batteryTimer = setInterval(() => void pushBattery(), getConfig().battery.refreshSeconds * 1000)
   usageTimer = setInterval(() => void pushUsage(), getConfig().usage.refreshMinutes * 60 * 1000)
+  // usage is not asked while the owner is away; ask as soon as they are back
+  powerMonitor.on('unlock-screen', () => void pushUsage())
+  powerMonitor.on('resume', () => void pushUsage())
   calendarTimer = setInterval(() => void pushCalendar(), getConfig().calendar.refreshMinutes * 60 * 1000)
 }
 
@@ -78,11 +87,23 @@ function registerDataIpc(): void {
   ipcMain.handle('get-tasks', () => readTasks())
   ipcMain.handle('task-done', async (_e, title: string) => {
     // YD_TASK_DRYRUN=1: check the flow (and the pet's reaction) without touching the Vault
-    const r = await markTaskDone(title, !!process.env.YD_TASK_DRYRUN)
+    const r = await markTaskDone(title)
     if (r.ok) getWindow('pet')?.webContents.send('pet-event', { type: 'task-done' })
     return r
   })
   ipcMain.handle('get-usage', () => readUsage())
+  ipcMain.handle('get-media', () => getMediaState())
+  // task editing from the tasks widget (edit mode) and its small input window
+  const refreshTasks = () => broadcast('tasks', readTasks())
+  ipcMain.on('task-form-open', (_e, mode: 'add' | 'edit', task?: { title: string; due: string | null }) => openTaskForm(mode, task))
+  ipcMain.on('task-form-close', () => closeTaskForm())
+  ipcMain.handle('task-add', async (_e, d: TaskDraft) => { const r = await addTask(d); refreshTasks(); return r })
+  ipcMain.handle('task-edit', async (_e, title: string, d: TaskDraft) => { const r = await editTask(title, d); refreshTasks(); return r })
+  ipcMain.handle('task-delete', async (_e, title: string) => { const r = await deleteTask(title); refreshTasks(); return r })
+  ipcMain.handle('task-trash', () => listTrash())
+  ipcMain.handle('task-restore', async (_e, content: string) => { const r = await restoreTask(content); refreshTasks(); return r })
+  ipcMain.on('media-command', (_e, cmd: string) => { if (['toggle', 'next', 'prev', 'close'].includes(cmd)) mediaCommand(cmd as 'toggle') })
+  ipcMain.on('media-soundcloud', () => playSoundCloud())
   ipcMain.handle('get-icon', (_e, path: string, icon?: string) => getIcon(path, icon))
   ipcMain.handle('launch', (_e, path: string, args?: string) => launch(path, args))
   ipcMain.handle('get-calendar', () => { const [s, e] = calendarRange(); return readCalendar(s, e) })
@@ -175,6 +196,10 @@ function registerMenus(): void {
       label, type: 'radio' as const, checked: (getConfig().pet.variant ?? 0) === i,
       click: () => { const c = updateConfig((cfg) => { cfg.pet.variant = i }); broadcast('config', c) }
     })) },
+    { label: '顔', submenu: PET_FACE_LABELS.map((label, i) => ({
+      label, type: 'radio' as const, checked: (getConfig().pet.face ?? 5) === i,
+      click: () => { const c = updateConfig((cfg) => { cfg.pet.face = i }); broadcast('config', c) }
+    })) },
     { type: 'separator' }
   ])
   registerContextMenuExtras('battery', (): MenuItemConstructorOptions[] => [{ label: '今すぐ更新', click: () => void pushBattery() }])
@@ -202,6 +227,7 @@ app.whenReady().then(async () => {
 app.on('second-instance', () => applyWidgetEnabled())
 app.on('window-all-closed', () => { /* keep running in the tray */ })
 app.on('before-quit', () => {
+  stopMediaService()
   stopCatcher()
   if (batteryTimer) clearInterval(batteryTimer)
   if (usageTimer) clearInterval(usageTimer)

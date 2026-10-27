@@ -22,14 +22,17 @@ export function defaultConfig(): Config {
       tasks: w(40, 520, 420, 300, { card: false }),
       launcher: w(1196, 40, 300, 380, { card: false }),
       calendar: w(1156, 440, 340, 410, { card: false }),
-      pet: w(600, 760, 160, 160, { opacity: 0, blur: 0 })
+      pet: w(600, 700, 300, 210, { opacity: 0, blur: 0 }),
+      // bottom centre, just above the taskbar (owner, 2026-10-27)
+      media: w(538, 812, 460, 96, { card: false })
     },
     launcher: { rows: 3, cols: 3, iconStyle: 'clear', items: [] },
     calendar: { hiddenIds: [], refreshMinutes: 10 },
     tasks: { vaultTaskFile: DEFAULT_VAULT_TASK, daysAhead: 3 },
     battery: { refreshSeconds: 60 },
     usage: { refreshMinutes: 5 },
-    pet: { phrases: ['やっほ〜', 'ねむい…', 'おつかれ！', 'なでて？', '…？', 'がんばろ', 'ひま〜'], wakePhrase: '…はっ！' }
+    pet: { phrases: ['やっほ〜', 'ねむい…', 'おつかれ！', 'なでて？', '…？', 'がんばろ', 'ひま〜'], wakePhrase: '…はっ！', face: 5 },
+    media: {}
   }
 }
 

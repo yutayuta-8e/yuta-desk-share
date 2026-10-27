@@ -21,7 +21,19 @@ export type PetPose = {
   blink: number
   jumpY: number
   flee: boolean
+  /** which pair of eyes and mouth (PET_FACES); the other expressions are shared */
+  faceStyle?: number
 }
+
+/** Eye-and-mouth pairs for the usual, open-eyed look (2026-10-27: the owner asked for five cuter ones). */
+export const PET_FACES: { id: string; label: string }[] = [
+  { id: 'line', label: 'いまの顔（たて線の目）' },
+  { id: 'round', label: 'まんまる目＋ちいさな口' },
+  { id: 'happy', label: 'にこにこ目＋あいた口' },
+  { id: 'omega', label: 'てん目＋ω口' },
+  { id: 'sparkle', label: 'きらきら目＋おちょぼ口' },
+  { id: 'droopy', label: 'たれ目＋にょろ口' }
+]
 export type PetInk = { core: string; halo: string }
 
 const BODY = 64
@@ -173,7 +185,7 @@ function face(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
     ctx.beginPath()
     if (cheeky) { const d = off < 0 ? 1 : -1; ctx.moveTo(ex + off - 4 * d, ey - 4); ctx.lineTo(ex + off + 3 * d, ey); ctx.lineTo(ex + off - 4 * d, ey + 4) }
     else if (closed) { ctx.moveTo(ex + off - 5, ey); ctx.quadraticCurveTo(ex + off, st === 'stretch' ? ey - 4 : ey + 4, ex + off + 5, ey) }
-    else { ctx.moveTo(ex + off, ey - 4); ctx.lineTo(ex + off, ey + 4) }
+    else eye(ctx, PET_FACES[p.faceStyle ?? 0]?.id ?? 'line', ex + off, ey, off)
     ctx.stroke()
   }
   ctx.beginPath()
@@ -181,8 +193,62 @@ function face(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
   if (st === 'sleep') ctx.arc(mx, ey + 14, 2.5, 0, Math.PI * 2)
   else if (st === 'yawn') { const o = 3 + 5 * Math.sin(Math.min(1, (p.t % 1.6) / 1.6) * Math.PI); ctx.ellipse(mx, ey + 15, 4, o, 0, 0, Math.PI * 2) }
   else if (cheeky) { ctx.moveTo(mx - 7, ey + 11); ctx.quadraticCurveTo(mx, ey + 19, mx + 7, ey + 11) }
-  else { ctx.moveTo(mx - 5, ey + 12); ctx.quadraticCurveTo(mx, ey + 16, mx + 5, ey + 12) }
+  else mouth(ctx, PET_FACES[p.faceStyle ?? 0]?.id ?? 'line', mx, ey)
   ctx.stroke()
+}
+
+/** One open eye in the given style, centred at (x, y); `off` < 0 for the left eye. Adds to the current path. */
+function eye(ctx: CanvasRenderingContext2D, style: string, x: number, y: number, off: number) {
+  switch (style) {
+    case 'round': // a solid round eye
+      ctx.stroke(); ctx.beginPath(); ctx.fillStyle = ctx.strokeStyle
+      ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); ctx.beginPath()
+      return
+    case 'happy': // ∩ smiling eyes
+      ctx.moveTo(x - 5, y + 2); ctx.quadraticCurveTo(x, y - 6, x + 5, y + 2)
+      return
+    case 'omega': // small dots
+      ctx.stroke(); ctx.beginPath(); ctx.fillStyle = ctx.strokeStyle
+      ctx.arc(x, y + 1, 2.1, 0, Math.PI * 2); ctx.fill(); ctx.beginPath()
+      return
+    case 'sparkle': { // a ring with a tiny light inside, up and to the outside
+      ctx.moveTo(x + 4, y); ctx.arc(x, y, 4, 0, Math.PI * 2)
+      ctx.stroke(); ctx.beginPath(); ctx.fillStyle = ctx.strokeStyle
+      ctx.arc(x + (off < 0 ? -1.3 : 1.3), y - 1.4, 1.3, 0, Math.PI * 2); ctx.fill(); ctx.beginPath()
+      return
+    }
+    case 'droopy': { // gentle eyes sloping down to the outside
+      const s = off < 0 ? -1 : 1
+      ctx.moveTo(x - s * 4, y - 1.5); ctx.quadraticCurveTo(x, y - 2.5, x + s * 4.5, y + 2)
+      return
+    }
+    default: // 'line': the original upright strokes
+      ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4)
+  }
+}
+
+/** The usual mouth for each face style. Adds to the current path. */
+function mouth(ctx: CanvasRenderingContext2D, style: string, x: number, ey: number) {
+  switch (style) {
+    case 'round': // a small u
+      ctx.moveTo(x - 3.5, ey + 11); ctx.quadraticCurveTo(x, ey + 14.5, x + 3.5, ey + 11)
+      return
+    case 'happy': // an open, laughing mouth
+      ctx.moveTo(x - 5, ey + 10); ctx.lineTo(x + 5, ey + 10); ctx.quadraticCurveTo(x + 4.5, ey + 17, x, ey + 17); ctx.quadraticCurveTo(x - 4.5, ey + 17, x - 5, ey + 10)
+      return
+    case 'omega': // ω
+      ctx.moveTo(x - 6, ey + 10); ctx.quadraticCurveTo(x - 5.5, ey + 15, x - 3, ey + 14.5); ctx.quadraticCurveTo(x, ey + 14, x, ey + 11)
+      ctx.quadraticCurveTo(x, ey + 14, x + 3, ey + 14.5); ctx.quadraticCurveTo(x + 5.5, ey + 15, x + 6, ey + 10)
+      return
+    case 'sparkle': // a tiny o
+      ctx.moveTo(x + 2, ey + 13); ctx.arc(x, ey + 13, 2, 0, Math.PI * 2)
+      return
+    case 'droopy': // a soft wavy line
+      ctx.moveTo(x - 6, ey + 12); ctx.quadraticCurveTo(x - 3, ey + 9.5, x, ey + 12); ctx.quadraticCurveTo(x + 3, ey + 14.5, x + 6, ey + 12)
+      return
+    default:
+      ctx.moveTo(x - 5, ey + 12); ctx.quadraticCurveTo(x, ey + 16, x + 5, ey + 12)
+  }
 }
 
 /** The lantern's little light: floats beside the pet on the side it faces; rests at its feet when asleep. */
@@ -220,6 +286,12 @@ export function drawPet(ctx: CanvasRenderingContext2D, size: number, variant: st
     ctx.globalAlpha = 1 - z; ctx.fillText('z', g.cx + 26, g.top - 6 - z * 18); ctx.globalAlpha = 1
     ctx.shadowBlur = 0
   }
+}
+
+/** The top of the pet's head in its box (y), so the speech bubble can follow it. */
+export function headTop(size: number, p: PetPose, variant: string): number {
+  const g = geometry(size, p, variant)
+  return g.top - (variant === 'ears' ? 10 : variant === 'drop' ? 12 : 0)
 }
 
 /** Where the trail of light starts (under the body), for the flying trail in Pet.tsx. */

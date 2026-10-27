@@ -74,7 +74,20 @@ export function connectGoogle(): Promise<{ ok: boolean; message: string }> {
 type GCalList = { items?: { id: string; summary?: string; summaryOverride?: string; backgroundColor?: string }[] }
 type GEvents = { items?: { id: string; summary?: string; start?: { date?: string; dateTime?: string }; end?: { date?: string; dateTime?: string }; status?: string }[] }
 
+/** Sample events for screenshots and checks before Google is connected (YD_DEMO_CALENDAR=1). */
+function demoCalendar(): CalendarData {
+  const at = (days: number, h: number, m = 0) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(h, m, 0, 0); return d.toISOString() }
+  const ev = (id: string, title: string, start: string, allDay = false): CalendarEvent => ({ id, calendarId: 'demo', calendarName: 'demo', color: '#d6bee8', title, start, end: start, allDay })
+  const d = new Date(); d.setDate(d.getDate() + 2)
+  const day2 = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return {
+    connected: true, calendars: [{ id: 'demo', name: 'demo', color: '#d6bee8', hidden: false }], updatedAt: Date.now(),
+    events: [ev('e1', 'ジャケット撮影', at(0, 23, 30)), ev('e2', 'MV の打ち合わせ', at(1, 14)), ev('e3', '新曲の公開日', day2, true), ev('e4', 'スタジオ', at(5, 19)), ev('e5', '過去の予定', at(-1, 10))]
+  }
+}
+
 export async function readCalendar(rangeStart: Date, rangeEnd: Date): Promise<CalendarData> {
+  if (process.env.YD_DEMO_CALENDAR) return demoCalendar()
   const base: CalendarData = { connected: isConnected(), calendars: [], events: [], updatedAt: Date.now() }
   if (!isConnected()) return { ...base, error: hasCredentials() ? '未接続' : 'credentials 未設置' }
   const client = makeClient()

@@ -80,13 +80,20 @@ export function Glass({ id, className, children, glassText = false }: { id: Widg
 
   // Widgets move only in edit mode (long press anywhere on a widget to enter it).
   const editing = useEditMode()
-  // press = start dragging; main ends edit mode when the release did not move the widget (a click)
-  const onOverlayDown = useCallback((e: MouseEvent) => {
+  // In edit mode a press anywhere drags the widget (main ends edit mode when the release did not
+  // move it, i.e. a click), except on controls marked data-edit-action (the tasks widget's 追加 etc.).
+  const onEditDown = useCallback((e: MouseEvent) => {
     if (e.button !== 0) return
-    e.preventDefault()
+    if ((e.target as HTMLElement).closest('[data-edit-action]')) return
+    e.preventDefault(); e.stopPropagation()
     setDragging(true)
     yd.dragStart(id)
   }, [id])
+  const onEditClick = useCallback((e: MouseEvent) => {
+    // using an edit action counts as activity: edit mode starts its 15 s again
+    if ((e.target as HTMLElement).closest('[data-edit-action]')) { yd.setEditMode(true); return }
+    e.preventDefault(); e.stopPropagation()
+  }, [])
 
   useEffect(() => {
     if (!dragging) return
@@ -111,13 +118,14 @@ export function Glass({ id, className, children, glassText = false }: { id: Widg
 
   return (
     <div ref={ref} className={`glass ${card ? '' : 'nocard'} ${dragging ? 'dragging' : ''} ${editing ? 'editing' : ''} ${className ?? ''}`} style={style}
-      onContextMenu={onContextMenu}>
+      onContextMenu={onContextMenu}
+      onMouseDownCapture={editing ? onEditDown : undefined} onClickCapture={editing ? onEditClick : undefined}>
       {TEST_BG && <TestUnderlay wp={wp} bounds={bounds} zoom={zoom} />}
       {card && <div className="backdrop">{img && <img src={img.src} style={img.style} draggable={false} alt="" />}</div>}
       {card && <div className="tint" />}
       <div className="content">{children}</div>
       {card && <div className="rim" />}
-      {editing && <div className="edit-overlay" onMouseDown={onOverlayDown} title="ドラッグで移動、クリックで編集を終わる" />}
+      {editing && <div className="edit-overlay" aria-hidden="true" />}
     </div>
   )
 }

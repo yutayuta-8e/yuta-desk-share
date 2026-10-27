@@ -10,14 +10,13 @@ export const STAT_NUM = 46
 
 /** One stat: the number written in light, a small %, a name and an optional note, and a line of light. */
 export function Stat({ value, label, sub, line, hot }: { value: number; label: ReactNode; sub?: ReactNode; line?: boolean; hot?: boolean }) {
-  // kerned digits, right-aligned in a column as wide as "100", so every %, name and line starts at the same x
-  const col = strokeDigitsWidth('100', STAT_NUM, 2)
+  // kerned digits start at the same x in every row (owner, 2026-10-27); the number column is as wide
+  // as "100%", so every name and line still starts at the same x
+  const col = strokeDigitsWidth('100', STAT_NUM, 2) + 22
   return (
     <div className="v2-stat">
-      <span className="num">
-        <span className="digits" style={{ width: col }}>
-          <StrokeDigits text={String(Math.round(value))} size={STAT_NUM} stroke={2} breathe={false} write={false} kern />
-        </span>
+      <span className="num" style={{ width: col }}>
+        <StrokeDigits text={String(Math.round(value))} size={STAT_NUM} stroke={2} breathe={false} write={false} kern />
         <Glow className="pct">%</Glow>
       </span>
       <span className="lbl">

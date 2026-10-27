@@ -15,10 +15,16 @@ import { Launcher } from './widgets/Launcher'
 import { Pet } from './widgets/Pet'
 import { Catcher } from './widgets/Catcher'
 import { PetSheet } from './widgets/PetSheet'
+import { Media } from './widgets/Media'
+import { TaskForm } from './widgets/TaskForm'
 
-const widgets: Record<string, () => React.JSX.Element> = { clock: Clock, calendar: Calendar, tasks: Tasks, battery: Battery, usage: Usage, launcher: Launcher, pet: Pet, catcher: Catcher }
+const widgets: Record<string, () => React.JSX.Element> = { clock: Clock, calendar: Calendar, tasks: Tasks, battery: Battery, usage: Usage, launcher: Launcher, pet: Pet, media: Media, catcher: Catcher }
 const root = createRoot(document.getElementById('root')!)
-if (new URLSearchParams(location.search).get('widget') === 'petsheet') {
+if (new URLSearchParams(location.search).get('widget') === 'taskform') {
+  // the small input window for adding / editing a task (an ordinary window, not a desktop widget)
+  document.title = 'yuta-desk タスク'
+  root.render(<TaskForm />)
+} else if (new URLSearchParams(location.search).get('widget') === 'petsheet') {
   // dev-only preview of the pet looks (scripts/pet-sheet.js); runs without the app's bridge
   document.title = 'yuta-desk petsheet'
   root.render(<PetSheet />)

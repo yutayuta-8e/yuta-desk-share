@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>yuta-desk SoundCloud</title>
+</head>
+<body style="margin:0;background:#000">
+<!-- Hidden player window (never shown). It has no access to the app: it only reports its state through
+     console messages that start with "YDSC ", and the app drives it through the widget API below. -->
+<iframe id="sc" width="400" height="166" allow="autoplay" frameborder="no"></iframe>
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<script>
+  const params = new URLSearchParams(location.search)
+  const url = params.get('url')
+  const frame = document.getElementById('sc')
+  frame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(url) + '&auto_play=true&visual=false&show_comments=false&hide_related=true'
+  const widget = SC.Widget(frame)
+  window.yd = widget
+  let state = { ready: false, playing: false, title: '', artist: '', artwork: '', position: 0, duration: 0 }
+  const report = () => console.log('YDSC ' + JSON.stringify(state))
+  const refresh = () => {
+    widget.getCurrentSound((s) => {
+      if (s) {
+        state.title = s.title || ''
+        state.artist = (s.user && s.user.username) || ''
+        state.artwork = (s.artwork_url || (s.user && s.user.avatar_url) || '').replace('-large.', '-t300x300.')
+        state.duration = (s.duration || 0) / 1000
+      }
+      widget.getPosition((ms) => { state.position = (ms || 0) / 1000; widget.isPaused((p) => { state.playing = !p; report() }) })
+    })
+  }
+  widget.bind(SC.Widget.Events.READY, () => { state.ready = true; widget.play(); refresh() })
+  widget.bind(SC.Widget.Events.PLAY, refresh)
+  widget.bind(SC.Widget.Events.PAUSE, refresh)
+  widget.bind(SC.Widget.Events.FINISH, refresh)
+  widget.bind(SC.Widget.Events.SEEK, refresh)
+  window.ydCommand = (cmd) => {
+    if (cmd === 'toggle') widget.toggle()
+    else if (cmd === 'play') widget.play()
+    else if (cmd === 'pause') widget.pause()
+    else if (cmd === 'next') widget.next()
+    else if (cmd === 'prev') widget.prev()
+    setTimeout(refresh, 400)
+  }
+  // keep the position fresh while playing (the widget animates it in between)
+  setInterval(() => { if (state.playing) refresh() }, 5000)
+</script>
+</body>
+</html>

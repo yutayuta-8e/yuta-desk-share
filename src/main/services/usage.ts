@@ -1,19 +1,14 @@
-// Reads rate-limit usage for the user's own AI subscriptions using the credentials those
-// tools already keep on this PC. Token values never leave the main process and are never logged.
-import { readFileSync, existsSync } from 'node:fs'
+// Reads the plan usage of the user's own AI tools, only through what those tools officially hand
+// out. yuta-desk never reads their login files and never talks to their servers itself
+// (2026-10-27: the earlier direct requests were outside what the providers intend).
+import { readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { UsageData, UsageService, UsageWindow } from '../../shared/types'
-
-const CLAUDE_CRED = join(homedir(), '.claude', '.credentials.json')
-const CODEX_AUTH = join(homedir(), '.codex', 'auth.json')
-
-function windowLabel(seconds: number | undefined, fallback: string): string {
-  if (!seconds) return fallback
-  if (seconds < 86400) return `${Math.round(seconds / 3600)} 時間`
-  if (seconds < 86400 * 10) return `${Math.round(seconds / 86400)} 日`
-  return `${Math.round(seconds / 86400)} 日`
-}
+import { bootLog } from '../boot'
+import { getConfig } from '../config'
 
 function win(percent: number | null | undefined, resetsAt: string | number | null | undefined, label: string): UsageWindow | null {
   if (percent === null || percent === undefined || Number.isNaN(Number(percent))) return null
@@ -23,87 +18,104 @@ function win(percent: number | null | undefined, resetsAt: string | number | nul
   return { percent: Math.max(0, Math.min(100, Number(percent))), resetsAt: reset, label }
 }
 
-async function claude(): Promise<UsageService> {
-  const name = 'Claude Code'
-  if (!existsSync(CLAUDE_CRED)) return { name, status: 'unauth', fiveHour: null, sevenDay: null, message: '未ログイン' }
+// ---- Claude Code ----
+// 1. Preferred: the numbers Claude Code hands its status line while the terminal `claude` runs
+//    (scripts/claude-statusline.js saves them to <userData>/claude-rate-limits.json).
+// 2. Otherwise run Claude Code's own `/usage` in print mode. It is a local command: no model call,
+//    no tokens. At most every 15 minutes, one run at a time, and the last numbers are kept on disk
+//    and shown meanwhile, so app restarts do not start new runs. Skipped while nobody is at the PC
+//    (no keyboard or mouse for 10 minutes, or the screen is locked); main asks again on unlock.
+const STATUSLINE_FILE = () => join(app.getPath('userData'), 'claude-rate-limits.json')
+const CACHE_FILE = () => join(app.getPath('userData'), 'usage-cache.json')
+const STATUSLINE_FRESH_MS = 30 * 60 * 1000
+const MIN_RUN_GAP_MS = 15 * 60 * 1000
+const AWAY_AFTER_S = 10 * 60
+
+type ClaudeCache = { fetchedAt: number; service: UsageService | null }
+function readCache(): ClaudeCache {
   try {
-    const j = JSON.parse(readFileSync(CLAUDE_CRED, 'utf8'))
-    const tok: string | undefined = j?.claudeAiOauth?.accessToken
-    if (!tok) return { name, status: 'unauth', fiveHour: null, sevenDay: null, message: '未ログイン' }
-    const r = await fetch('https://api.anthropic.com/api/oauth/usage', {
-      headers: { Authorization: `Bearer ${tok}`, 'anthropic-beta': 'oauth-2025-04-20', Accept: 'application/json' }
-    })
-    if (r.status === 401 || r.status === 403) return { name, status: 'unauth', fiveHour: null, sevenDay: null, message: 'claude で再ログインが必要' }
-    if (!r.ok) return { name, status: 'error', fiveHour: null, sevenDay: null, message: `HTTP ${r.status}` }
-    const u = await r.json() as Record<string, { utilization?: number; resets_at?: string } | null>
-    const five = u.five_hour ?? null
-    const seven = u.seven_day ?? null
-    return {
-      name, status: 'ok',
-      fiveHour: five ? win(five.utilization, five.resets_at, '5 時間') : null,
-      sevenDay: seven ? win(seven.utilization, seven.resets_at, '1 週間') : null
-    }
-  } catch (e) {
-    return { name, status: 'error', fiveHour: null, sevenDay: null, message: String(e).slice(0, 120) }
-  }
+    const c = JSON.parse(readFileSync(CACHE_FILE(), 'utf8')).claude
+    return { fetchedAt: Number(c?.fetchedAt) || 0, service: c?.service ?? null }
+  } catch { return { fetchedAt: 0, service: null } }
+}
+function writeCache(c: ClaudeCache): void {
+  try { writeFileSync(CACHE_FILE(), JSON.stringify({ claude: c })) } catch (e) { bootLog(`usage cache write failed ${String(e).slice(0, 80)}`) }
 }
 
-// Codex CLI's public OAuth client id; used only to refresh the user's own token in memory.
-const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
-let codexRefreshed: { token: string; at: number } | null = null
-
-async function codexRefresh(refreshToken: string): Promise<string | null> {
-  if (codexRefreshed && Date.now() - codexRefreshed.at < 50 * 60 * 1000) return codexRefreshed.token
+type StatusWin = { used_percentage?: number; resets_at?: number | string } | null
+function fromStatusLine(now: number): UsageService | null {
   try {
-    const r = await fetch('https://auth.openai.com/oauth/token', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: CODEX_CLIENT_ID })
-    })
-    if (!r.ok) return null
-    const j = await r.json() as { access_token?: string }
-    if (!j.access_token) return null
-    codexRefreshed = { token: j.access_token, at: Date.now() }
-    return j.access_token
+    const j = JSON.parse(readFileSync(STATUSLINE_FILE(), 'utf8')) as { captured_at?: number; five_hour?: StatusWin; seven_day?: StatusWin }
+    if (!j.captured_at || now - j.captured_at > STATUSLINE_FRESH_MS) return null
+    const mk = (w: StatusWin, label: string) => {
+      if (!w) return null
+      const reset = typeof w.resets_at === 'number' ? w.resets_at : typeof w.resets_at === 'string' ? Date.parse(w.resets_at) / 1000 : null
+      if (reset && reset * 1000 < now) return null // that window has rolled over since the capture
+      return win(w.used_percentage, reset ?? null, label)
+    }
+    const fiveHour = mk(j.five_hour ?? null, '5 時間'), sevenDay = mk(j.seven_day ?? null, '1 週間')
+    if (!fiveHour && !sevenDay) return null
+    return { name: 'Claude Code', status: 'ok', fiveHour, sevenDay, asOf: j.captured_at }
   } catch { return null }
 }
 
-async function codexFetchUsage(tok: string, acct: string | undefined): Promise<Response> {
-  const headers: Record<string, string> = { Authorization: `Bearer ${tok}`, Accept: 'application/json' }
-  if (acct) headers['ChatGPT-Account-Id'] = acct
-  return fetch('https://chatgpt.com/backend-api/wham/usage', { headers })
+let claudeInFlight: Promise<UsageService> | null = null
+async function claude(): Promise<UsageService> {
+  const now = Date.now()
+  const fromLine = fromStatusLine(now)
+  if (fromLine) return fromLine
+  const cache = readCache()
+  if (cache.service && now - cache.fetchedAt < MIN_RUN_GAP_MS) return { ...cache.service, asOf: cache.fetchedAt }
+  const presence = powerMonitor.getSystemIdleState(AWAY_AFTER_S)
+  if (presence === 'idle' || presence === 'locked') {
+    if (cache.service) return { ...cache.service, asOf: cache.fetchedAt }
+    return { name: 'Claude Code', status: 'error', fiveHour: null, sevenDay: null, message: '離席中。戻ったら取得します' }
+  }
+  if (!claudeInFlight) claudeInFlight = claudeUsageCommand(cache).finally(() => { claudeInFlight = null })
+  return claudeInFlight
 }
 
-async function codex(): Promise<UsageService> {
-  const name = 'Codex'
-  if (!existsSync(CODEX_AUTH)) return { name, status: 'unauth', fiveHour: null, sevenDay: null, message: '未ログイン' }
-  try {
-    const j = JSON.parse(readFileSync(CODEX_AUTH, 'utf8'))
-    const tok: string | undefined = codexRefreshed?.token ?? j?.tokens?.access_token
-    const acct: string | undefined = j?.tokens?.account_id
-    if (!tok) return { name, status: 'unauth', fiveHour: null, sevenDay: null, message: '未ログイン' }
-    let r = await codexFetchUsage(tok, acct)
-    if ((r.status === 401 || r.status === 403) && j?.tokens?.refresh_token) {
-      const fresh = await codexRefresh(j.tokens.refresh_token)
-      if (fresh) r = await codexFetchUsage(fresh, acct)
-    }
-    if (r.status === 401 || r.status === 403) return { name, status: 'unauth', fiveHour: null, sevenDay: null, message: 'codex で再ログインが必要' }
-    if (!r.ok) return { name, status: 'error', fiveHour: null, sevenDay: null, message: `HTTP ${r.status}` }
-    const u = await r.json() as { rate_limit?: { primary_window?: { used_percent?: number; reset_at?: number; limit_window_seconds?: number }; secondary_window?: { used_percent?: number; reset_at?: number; limit_window_seconds?: number } } }
-    const p = u.rate_limit?.primary_window ?? null
-    const s = u.rate_limit?.secondary_window ?? null
-    // primary is usually the 5h window, secondary the weekly one; sort by window length to be safe.
-    const wins = [p, s].filter(Boolean) as NonNullable<typeof p>[]
-    wins.sort((a, b) => (a.limit_window_seconds ?? 0) - (b.limit_window_seconds ?? 0))
-    const short = wins.find((x) => (x.limit_window_seconds ?? 0) <= 6 * 3600) ?? null
-    const long = wins.find((x) => (x.limit_window_seconds ?? 0) > 6 * 3600) ?? null
-    return {
-      name, status: 'ok',
-      fiveHour: short ? win(short.used_percent, short.reset_at, windowLabel(short.limit_window_seconds, '5 時間')) : null,
-      sevenDay: long ? win(long.used_percent, long.reset_at, windowLabel(long.limit_window_seconds, '1 週間')) : null
-    }
-  } catch (e) {
-    return { name, status: 'error', fiveHour: null, sevenDay: null, message: String(e).slice(0, 120) }
-  }
+function claudeExe(): string {
+  const local = join(homedir(), '.local', 'bin', 'claude.exe')
+  return existsSync(local) ? local : 'claude'
+}
+
+type UsageRow = { kind?: string; percent?: number; resets_at?: string | null }
+
+/** Runs `claude -p /usage` and reads the structured report Claude Code prints with it
+ *  (`usage_report`, documented in the Agent SDK reference as experimental). No shell, so the
+ *  slash is passed as is. Session files are not kept and MCP servers are not started. */
+function claudeUsageCommand(cache: ClaudeCache): Promise<UsageService> {
+  const name = 'Claude Code'
+  const cached = cache.service ? { ...cache.service, asOf: cache.fetchedAt } : null
+  const args = ['-p', '/usage', '--output-format', 'stream-json', '--verbose', '--strict-mcp-config', '--no-session-persistence']
+  return new Promise((resolve) => {
+    const child = execFile(claudeExe(), args, { windowsHide: true, timeout: 60000, cwd: app.getPath('userData'), maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
+      const now = Date.now()
+      let rows: UsageRow[] | null = null
+      for (const line of String(out).split('\n')) {
+        if (!line.includes('usage_report')) continue
+        try { rows = JSON.parse(line)?.usage_report?.rate_limits?.limits ?? null } catch { /* not this line */ }
+        if (rows) break
+      }
+      const session = rows?.find((r) => r.kind === 'session'), weekly = rows?.find((r) => r.kind === 'weekly_all')
+      if (!session && !weekly) {
+        const why = (err as NodeJS.ErrnoException | null)?.code === 'ENOENT' ? 'claude が見つからない' : 'Claude Code から取れなかった'
+        bootLog(`usage claude /usage failed: ${why}${err ? ` (${String(err.message).slice(0, 80)})` : ''}`)
+        writeCache({ ...cache, fetchedAt: now })
+        return resolve(cached ?? { name, status: 'error', fiveHour: null, sevenDay: null, message: why })
+      }
+      const service: UsageService = {
+        name, status: 'ok',
+        fiveHour: session ? win(session.percent, session.resets_at, '5 時間') : null,
+        sevenDay: weekly ? win(weekly.percent, weekly.resets_at, '1 週間') : null
+      }
+      writeCache({ fetchedAt: now, service })
+      bootLog('usage claude /usage ok')
+      resolve({ ...service, asOf: now })
+    })
+    child.stdin?.end() // nothing to send; otherwise Claude Code waits for input first
+  })
 }
 
 function grok(): UsageService {
@@ -111,6 +123,12 @@ function grok(): UsageService {
 }
 
 export async function readUsage(): Promise<UsageData> {
-  const services = await Promise.all([claude(), codex(), Promise.resolve(grok())])
+  // services the owner hid are not asked at all
+  const hidden = new Set(getConfig().usage.hidden ?? [])
+  const skip = (name: string): UsageService => ({ name, status: 'unsupported', fiveHour: null, sevenDay: null, message: '非表示' })
+  const services = await Promise.all([
+    hidden.has('Claude Code') ? skip('Claude Code') : claude(),
+    Promise.resolve(grok())
+  ])
   return { services, updatedAt: Date.now() }
 }

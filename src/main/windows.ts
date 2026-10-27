@@ -139,10 +139,15 @@ let drag: { id: WidgetId; dx: number; dy: number; timer: NodeJS.Timeout; x0: num
 // for every widget; a plain click, or 15 s without moving anything, turns it off.
 let editMode = false
 let editTimer: NodeJS.Timeout | null = null
+let editHeld = false // while the task input window is open, edit mode does not time out
 const EDIT_IDLE_MS = 15000
 function armEditTimer(): void {
   if (editTimer) clearTimeout(editTimer)
-  editTimer = editMode ? setTimeout(() => setEditMode(false), EDIT_IDLE_MS) : null
+  editTimer = editMode && !editHeld ? setTimeout(() => setEditMode(false), EDIT_IDLE_MS) : null
+}
+export function holdEditMode(hold: boolean): void {
+  editHeld = hold
+  armEditTimer()
 }
 export function setEditMode(on: boolean): void {
   if (!on) stopDrag()

@@ -5,7 +5,7 @@ import type { Bounds, PetState, WidgetId } from '@shared/types'
 import { TEST_BG, TestUnderlay } from '../light/testBg'
 import { timeOfDay } from '../light/timeOfDay'
 import { hmNow } from '../light/clockTime'
-import { PET_VARIANTS, drawPet, trailOrigin } from '../light/petDraw'
+import { PET_VARIANTS, drawPet, headTop, trailOrigin } from '../light/petDraw'
 
 /**
  * The pet: a little creature drawn as one line of light. Its look is provisional (the owner will
@@ -20,7 +20,10 @@ import { PET_VARIANTS, drawPet, trailOrigin } from '../light/petDraw'
  *  - when a task is marked done it hops for joy
  * The window moves with the pet, so the pet is the only clickable area.
  */
-const SIZE = 160
+const SIZE = 160 // the box the pet is drawn in
+/** The pet's window: wider and taller than the pet so the speech bubble fits beside its head. */
+const WIN_W = 300, WIN_H = 210
+const PX = (WIN_W - SIZE) / 2, PY = WIN_H - SIZE // where the pet's box sits inside the window
 const BODY = 64
 /** Debug only: ?petvariant=ears shows that look regardless of the config. */
 const DEBUG_VARIANT = new URLSearchParams(location.search).get('petvariant')
@@ -40,6 +43,16 @@ type Sim = {
 }
 type Rect = Bounds & { id: WidgetId }
 
+/** The ghost's way of talking: a half-width "~" at the end ("13時だよ~", "えらい~！"). Lines that are
+ *  only punctuation ("…？") or already end in a wave stay as they are. */
+function withTilde(t: string): string {
+  const s = t.trim()
+  if (!s || !/[^…！？!?。、.・\s]/.test(s)) return s
+  if (/[~〜～]$/.test(s)) return s.replace(/[〜～]$/, '~') // a full-width wave becomes half-width too
+  const m = /^(.*?)([！？!?]+)$/.exec(s)
+  return m ? `${m[1]}~${m[2]}` : `${s}~`
+}
+
 function pick<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)] }
 function weighted<T extends string>(w: Record<T, number>): T {
   const entries = Object.entries(w) as [T, number][]
@@ -58,7 +71,10 @@ export function Pet() {
   const cfg = useConfig()
   const sim = useRef<Sim | null>(null)
   const cursor = useRef({ x: 0, y: 0 })
-  const [bubble, setBubble] = useState('')
+  // speech bubble: the text, how much of it is shown yet, and the side the pet faced when it spoke
+  const [bubble, setBubble] = useState<{ text: string; shown: number; side: 1 | -1; leaving: boolean } | null>(null)
+  const typeTimer = useRef<number | null>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
   // test harness only: where the pet window is, so the test wallpaper can be drawn behind it
   const [testPos, setTestPos] = useState<{ x: number; y: number } | null>(null)
   const bubbleTimer = useRef<number | null>(null)
@@ -66,18 +82,38 @@ export function Pet() {
   // the look can change from the menu without restarting the animation loop
   const variantRef = useRef('classic')
   variantRef.current = DEBUG_VARIANT ?? PET_VARIANTS[cfg?.pet.variant ?? 0]?.id ?? 'classic'
+  const faceRef = useRef(0)
+  faceRef.current = cfg?.pet.face ?? 5
 
-  const say = (t: string, ms = 1800) => {
-    setBubble(t)
+  /** Says something: a bubble pops up on the side the pet faces and the words appear one by one. */
+  const say = (raw: string, ms = 2500) => {
+    const t = withTilde(raw)
+    const side = sim.current?.dir ?? 1
+    const chars = [...t]
     if (bubbleTimer.current) window.clearTimeout(bubbleTimer.current)
-    bubbleTimer.current = window.setTimeout(() => setBubble(''), ms)
+    if (typeTimer.current) window.clearInterval(typeTimer.current)
+    setBubble({ text: t, shown: 0, side, leaving: false })
+    let n = 0
+    typeTimer.current = window.setInterval(() => {
+      n++
+      setBubble((b) => (b ? { ...b, shown: n } : b))
+      if (n >= chars.length && typeTimer.current) { window.clearInterval(typeTimer.current); typeTimer.current = null }
+    }, 75)
+    const total = chars.length * 75 + ms
+    bubbleTimer.current = window.setTimeout(() => {
+      setBubble((b) => (b ? { ...b, leaving: true } : b))
+      bubbleTimer.current = window.setTimeout(() => setBubble(null), 420)
+    }, total)
   }
   sayRef.current = say
+
+  // the pet's window is wider than the pet (room for the bubble)
+  useEffect(() => { yd.setWindowSize(WIN_W, WIN_H) }, [])
 
   useEffect(() => {
     if (!wp) return
     const screenW = wp.screenW, screenH = wp.screenH
-    const floorY = (wp.workH || screenH - 48) - SIZE + 2 // stand on the taskbar's top edge
+    const floorY = (wp.workH || screenH - 48) - WIN_H + 2 // stand on the taskbar's top edge
     const speed = DEMO ? 2.2 : 1
     const dur = (min: number, span: number) => (min + Math.random() * span) * (DEMO ? 0.35 : 1)
     let rects: Rect[] = []
@@ -85,13 +121,14 @@ export function Pet() {
       void yd.getWidgetRects().then((r) => {
         rects = r
         const s = sim.current
+        if (new URLSearchParams(location.search).get('debug') === '1') console.log('pet rects', JSON.stringify(r.map((x) => [x.id, Math.round(x.x), Math.round(x.y), Math.round(x.width), Math.round(x.height)])), s ? JSON.stringify({ x: Math.round(s.x), y: Math.round(s.y), st: s.state, blocked: blocked(s.x, s.y) }) : 'no sim')
         if (s && !airborne(s) && blocked(s.x, s.y)) {
           const fx = floorSpot(s.x)
           if (fx !== null) { s.x = fx; s.y = floorY; s.perch = null; yd.petMove(s.x, s.y) }
+          else land(s)
         }
       })
     }
-    loadRects()
     const rectTimer = window.setInterval(loadRects, 10_000)
 
     if (!sim.current) {
@@ -102,8 +139,9 @@ export function Pet() {
           tx: x, ty: floorY, after: 'land', teaseId: null, flee: false, surfaceY: floorY, perch: null, trail: [], route: []
         }
         yd.petMove(x, floorY)
+        loadRects() // moves the pet off any widget it starts on
       })
-    }
+    } else loadRects()
 
     let raf = 0
     let last = performance.now()
@@ -119,7 +157,7 @@ export function Pet() {
       })
     }, 120)
 
-    const clampX = (x: number) => Math.min(screenW - SIZE, Math.max(0, x))
+    const clampX = (x: number) => Math.min(screenW - WIN_W, Math.max(0, x))
     const clampY = (y: number) => Math.min(floorY, Math.max(0, y))
     const airborne = (s: Sim) => s.state === 'fly' || s.state === 'hover'
 
@@ -128,7 +166,7 @@ export function Pet() {
     // widget; it flies around them, sits on their top edge and teases them from the side.
     const M = 10 // widget windows have empty margins; touching them is fine
     const blocked = (x: number, y: number) => rects.some((r) =>
-      x < r.x + r.width - M && x + SIZE > r.x + M && y < r.y + r.height - M && y + SIZE > r.y + M)
+      x < r.x + r.width - M && x + WIN_W > r.x + M && y < r.y + r.height - M && y + WIN_H > r.y + M)
     const pathFree = (x0: number, y0: number, x1: number, y1: number) => {
       const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 16))
       for (let i = 0; i <= n; i++) if (blocked(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n)) return false
@@ -136,7 +174,7 @@ export function Pet() {
     }
     const randomFree = (tries = 40): { x: number; y: number } | null => {
       for (let i = 0; i < tries; i++) {
-        const x = Math.random() * (screenW - SIZE), y = 40 + Math.random() * (floorY - 40)
+        const x = Math.random() * (screenW - WIN_W), y = 40 + Math.random() * (floorY - 40)
         if (!blocked(x, y)) return { x, y }
       }
       return null
@@ -144,7 +182,8 @@ export function Pet() {
     /** A path to (x, y): straight if clear, else through one free waypoint, else null. */
     const routeTo = (s: Sim, x: number, y: number): { x: number; y: number }[] | null => {
       if (blocked(x, y)) return null
-      if (pathFree(s.x, s.y, x, y)) return [{ x, y }]
+      // already over a widget (it moved, or one appeared): get off it the short way
+      if (blocked(s.x, s.y) || pathFree(s.x, s.y, x, y)) return [{ x, y }]
       for (let i = 0; i < 60; i++) {
         const w = randomFree(1)
         if (w && pathFree(s.x, s.y, w.x, w.y) && pathFree(w.x, w.y, x, y)) return [w, { x, y }]
@@ -165,13 +204,17 @@ export function Pet() {
     /** Somewhere free on the floor, as near as possible to x. */
     const floorSpot = (x: number): number | null => {
       for (let d = 0; d < screenW; d += 24) {
-        for (const c of [x + d, x - d]) if (c >= 0 && c <= screenW - SIZE && !blocked(c, floorY)) return c
+        for (const c of [x + d, x - d]) if (c >= 0 && c <= screenW - WIN_W && !blocked(c, floorY)) return c
       }
       return null
     }
+    // the floor may be full of widgets (tasks, media, calendar all reach the bottom): then rest on a widget's top edge
     const land = (s: Sim) => {
       const fx = floorSpot(s.x + (Math.random() - 0.5) * 300)
-      if (fx === null || !flyTo(s, fx, floorY, 'land')) { s.state = 'hover'; s.until = performance.now() + 3000 }
+      if (fx !== null && flyTo(s, fx, floorY, 'land')) return
+      const p = perchSpot()
+      if (p && flyTo(s, p.x, p.y, 'perch')) { s.perch = p.r; return }
+      s.state = 'hover'; s.until = performance.now() + 3000
     }
     const flyAnywhere = (s: Sim): boolean => {
       for (let i = 0; i < 12; i++) { const p = randomFree(); if (p && flyTo(s, p.x, p.y, 'hover')) return true }
@@ -180,8 +223,9 @@ export function Pet() {
 
     /** Somewhere to sit: the top edge of a widget with room above it (the pet's feet on the edge). */
     const perchSpot = (): { x: number; y: number; r: Rect } | null => {
-      const spots = rects.filter((r) => r.y - SIZE + 8 > 0 && r.width > SIZE * 0.8)
-        .map((r) => ({ r, x: r.x + Math.random() * Math.max(0, r.width - SIZE), y: r.y - SIZE + 8 }))
+      // the pet's feet on the widget's top edge, its body over the widget
+      const spots = rects.filter((r) => r.y - WIN_H + 8 > 0 && r.width > SIZE * 0.8)
+        .map((r) => ({ r, x: r.x - PX + Math.random() * Math.max(0, r.width - SIZE), y: r.y - WIN_H + 8 }))
         .filter((p) => !blocked(p.x, p.y))
       return spots.length ? pick(spots) : null
     }
@@ -191,9 +235,9 @@ export function Pet() {
       if (!ok.length) return null
       const r = pick(ok)
       // from just outside the widget: below the clock, beside the launcher
-      if (r.id === 'clock') return { id: r.id, x: r.x + r.width * (0.25 + Math.random() * 0.5) - SIZE / 2, y: r.y + r.height - M }
+      if (r.id === 'clock') return { id: r.id, x: r.x + r.width * (0.25 + Math.random() * 0.5) - WIN_W / 2, y: r.y + r.height - M }
       const left = r.x > screenW / 2
-      return { id: r.id, x: left ? r.x - SIZE + M : r.x + r.width - M, y: r.y + r.height * (0.2 + Math.random() * 0.5) - SIZE / 2 }
+      return { id: r.id, x: left ? r.x - WIN_W + M : r.x + r.width - M, y: r.y + r.height * (0.2 + Math.random() * 0.5) - WIN_H / 2 }
     }
 
     const sleepy = () => { const h = hourOf(hmNow()); return h < 6 }
@@ -287,9 +331,10 @@ export function Pet() {
       if (!c) return
       const ctx = c.getContext('2d')!
       const dpr = window.devicePixelRatio || 1
-      if (c.width !== SIZE * dpr) { c.width = SIZE * dpr; c.height = SIZE * dpr }
+      if (c.width !== WIN_W * dpr) { c.width = WIN_W * dpr; c.height = WIN_H * dpr }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      ctx.clearRect(0, 0, SIZE, SIZE)
+      ctx.clearRect(0, 0, WIN_W, WIN_H)
+      ctx.setTransform(dpr, 0, 0, dpr, PX * dpr, PY * dpr) // the pet's box inside the window
       const phase = (Date.now() % 6000) / 6000
       const k = timeOfDay().k
       const breath = Math.min(1, (0.45 + 0.55 * (1 - Math.cos(phase * Math.PI * 2)) / 2) * Math.min(1.15, k))
@@ -306,7 +351,13 @@ export function Pet() {
         })
         ctx.globalAlpha = 1
       }
-      drawPet(ctx, SIZE, variant, s, ink, breath, k)
+      drawPet(ctx, SIZE, variant, { ...s, faceStyle: faceRef.current }, ink, breath, k)
+      // the bubble follows the head (hops, bobbing), a little above it
+      const b = bubbleRef.current
+      if (b) {
+        const head = PY + headTop(SIZE, s, variant)
+        b.style.bottom = `${Math.max(24, Math.min(WIN_H - 34, WIN_H - head + 22))}px`
+      }
     }
 
     const step = (now: number) => {
@@ -318,8 +369,8 @@ export function Pet() {
         checkHour(s, now)
         if (now > s.until && s.state !== 'jump' && s.state !== 'fly') pickState(s, now)
         if (s.state === 'walk') {
-          const lo = s.perch ? s.perch.x - SIZE * 0.2 : 0
-          const hi = s.perch ? s.perch.x + s.perch.width - SIZE * 0.8 : screenW - SIZE
+          const lo = s.perch ? s.perch.x - PX - SIZE * 0.2 : 0
+          const hi = s.perch ? s.perch.x + s.perch.width - PX - SIZE * 0.8 : screenW - WIN_W
           const nx = s.x + s.dir * WALK * speed * dt
           if (nx < lo || nx > hi || blocked(nx, s.y)) {
             s.dir = s.dir === 1 ? -1 : 1
@@ -363,7 +414,7 @@ export function Pet() {
           if (s.jumpY >= 0) { s.jumpY = 0; s.vy = 0; s.state = s.perch ? 'perch' : 'idle'; s.until = now + 800 }
         }
         // mischief: a cursor rushing at the pet sometimes gets dodged
-        const pcx = s.x + SIZE / 2, pcy = s.y + SIZE - BODY / 2
+        const pcx = s.x + WIN_W / 2, pcy = s.y + WIN_H - BODY / 2
         const dx = cursor.current.x - pcx, dy = cursor.current.y - pcy
         const dist = Math.hypot(dx, dy) || 1
         if (dist < 70 && now - lastDodge > 20000 && s.state !== 'sleep' && s.state !== 'fly' && !sleepy() && Math.random() < 0.02) {
@@ -403,9 +454,13 @@ export function Pet() {
     }
   }, [wp])
 
-  const onClick = () => {
+  const onClick = (e: React.MouseEvent) => {
     const s = sim.current
     if (!s) return
+    // only the pet itself is clickable, not the empty room around it kept for the bubble
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = e.clientX - r.left, y = e.clientY - r.top
+    if (x < PX + 30 || x > PX + SIZE - 30 || y < PY + 30) return
     if (s.state === 'sleep') { s.state = 'idle'; s.until = performance.now() + 1500; say(cfg?.pet.wakePhrase ?? '…はっ！'); return }
     if (s.state === 'fly' || s.state === 'hover') { say(pick(cfg?.pet.phrases?.length ? cfg.pet.phrases : PHRASES)); return }
     s.state = 'jump'; s.vy = -420; s.jumpY = 0
@@ -414,9 +469,16 @@ export function Pet() {
 
   return (
     <div className="pet-root" onClick={onClick} onContextMenu={(e) => { e.preventDefault(); yd.contextMenu('pet') }}>
-      {TEST_BG && testPos && <TestUnderlay wp={wp} bounds={{ x: testPos.x, y: testPos.y, width: SIZE, height: SIZE }} zoom={1} />}
+      {TEST_BG && testPos && <TestUnderlay wp={wp} bounds={{ x: testPos.x, y: testPos.y, width: WIN_W, height: WIN_H }} zoom={1} />}
       <canvas ref={canvas} />
-      {bubble && <div className="bubble">{bubble}</div>}
+      {bubble && (
+        <div ref={bubbleRef} className={`pet-bubble ${bubble.side > 0 ? 'right' : 'left'} ${bubble.leaving ? 'leaving' : ''}`} aria-live="polite">
+          <span className="text">{[...bubble.text].slice(0, Math.max(1, bubble.shown)).join('')}</span>
+          {/* the full text keeps the bubble's size steady while the words type in */}
+          <span className="sizer" aria-hidden="true">{bubble.text}</span>
+          <svg className="tail" viewBox="0 0 22 18" aria-hidden="true"><path d="M5 1 Q4 9 1 16 Q9 11 15 1" /></svg>
+        </div>
+      )}
     </div>
   )
 }
