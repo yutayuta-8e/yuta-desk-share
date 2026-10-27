@@ -49,6 +49,9 @@ $pending = $stdin.ReadLineAsync()
 $last = ''
 $lastTrack = ''
 $thumb = $null
+$thumbRev = 0
+$trackAt = [DateTime]::MinValue
+$thumbAt = [DateTime]::MinValue
 while ($true) {
   # commands
   while ($pending.IsCompleted) {
@@ -78,7 +81,19 @@ while ($true) {
       $props = Await ($s.TryGetMediaPropertiesAsync()) $propsType
       $tl = $s.GetTimelineProperties()
       $track = "$($s.SourceAppUserModelId)|$($props.Title)|$($props.Artist)"
-      if ($track -ne $lastTrack) { $thumb = Thumb $props; $lastTrack = $track }
+      $now = [DateTime]::UtcNow
+      if ($track -ne $lastTrack) {
+        $thumb = Thumb $props; $lastTrack = $track; $trackAt = $now; $thumbAt = $now; $thumbRev++
+      } else {
+        # browsers first hand over their own icon and swap in the artwork once it has loaded, so look
+        # again: every 2 s for the first 20 s of a track, then every 15 s
+        $gap = if (($now - $trackAt).TotalSeconds -lt 20) { 2 } else { 15 }
+        if (($now - $thumbAt).TotalSeconds -ge $gap) {
+          $thumbAt = $now
+          $t = Thumb $props
+          if ($t -and $t -ne $thumb) { $thumb = $t; $thumbRev++ }
+        }
+      }
       $state = @{
         active = $true
         app = $s.SourceAppUserModelId
@@ -92,6 +107,7 @@ while ($true) {
         canNext = $info.Controls.IsNextEnabled
         canPrev = $info.Controls.IsPreviousEnabled
         thumbKey = $lastTrack
+        thumbRev = $thumbRev
       }
     }
     $json = $state | ConvertTo-Json -Compress -Depth 4

@@ -1,4 +1,4 @@
-import './boot'
+import { bootLog } from './boot'
 import { app, ipcMain, Menu, powerMonitor, type MenuItemConstructorOptions } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
@@ -75,9 +75,15 @@ function startServices(): void {
   mediaEvents.on('changed', (m) => getWindow('media')?.webContents.send('media', m))
   batteryTimer = setInterval(() => void pushBattery(), getConfig().battery.refreshSeconds * 1000)
   usageTimer = setInterval(() => void pushUsage(), getConfig().usage.refreshMinutes * 60 * 1000)
-  // usage is not asked while the owner is away; ask as soon as they are back
-  powerMonitor.on('unlock-screen', () => void pushUsage())
-  powerMonitor.on('resume', () => void pushUsage())
+  // usage is not asked while the owner is away; ask as soon as they are back. Logged so the log
+  // shows whether a refresh came from coming back or from the timer.
+  const onBack = (why: string) => {
+    bootLog(`usage back (${why}) idle=${powerMonitor.getSystemIdleTime()}s state=${powerMonitor.getSystemIdleState(10 * 60)}`)
+    void pushUsage()
+  }
+  powerMonitor.on('lock-screen', () => bootLog('screen locked'))
+  powerMonitor.on('unlock-screen', () => onBack('unlock'))
+  powerMonitor.on('resume', () => onBack('resume'))
   calendarTimer = setInterval(() => void pushCalendar(), getConfig().calendar.refreshMinutes * 60 * 1000)
 }
 
