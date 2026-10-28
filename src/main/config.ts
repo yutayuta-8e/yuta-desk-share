@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { Config, WidgetConfig, WidgetId } from '../shared/types'
+import { PET_PHRASES } from '../shared/petPhrases'
 
 const DEFAULT_VAULT_TASK = join(homedir(), 'library', '資料', 'ai-context', 'admin', 'タスク.md')
 
@@ -34,7 +35,7 @@ export function defaultConfig(): Config {
     tasks: { vaultTaskFile: DEFAULT_VAULT_TASK, daysAhead: 3 },
     battery: { refreshSeconds: 60 },
     usage: { refreshMinutes: 5 },
-    pet: { phrases: ['やっほ〜', 'ねむい…', 'おつかれ！', 'なでて？', '…？', 'がんばろ', 'ひま〜'], wakePhrase: '…はっ！', face: 5 },
+    pet: { phrases: [...PET_PHRASES], wakePhrase: '…はっ！', face: 5 },
     media: {}
   }
 }

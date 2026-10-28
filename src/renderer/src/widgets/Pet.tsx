@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { yd } from '../api'
 import { useConfig, useWallpaper } from '../hooks'
 import type { Bounds, PetState, WidgetId } from '@shared/types'
+import { PET_PHRASES } from '@shared/petPhrases'
 import { TEST_BG, TestUnderlay } from '../light/testBg'
 import { timeOfDay } from '../light/timeOfDay'
 import { hmNow } from '../light/clockTime'
@@ -29,7 +30,7 @@ const BODY = 64
 const DEBUG_VARIANT = new URLSearchParams(location.search).get('petvariant')
 const WALK = 38 // px/s
 const FLY = 150 // px/s
-const PHRASES = ['やっほ〜', 'ねむい…', 'おつかれ！', 'なでて？', '…？', 'がんばろ', 'ひま〜']
+const PHRASES = PET_PHRASES
 const CHEERS = ['えらい！', 'やったね！', 'おつかれさま！']
 const DEMO = new URLSearchParams(location.search).get('petdemo') === '1'
 

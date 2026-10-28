@@ -3,5 +3,6 @@ dist/
 out/
 .env
 *.log
-docs/mockups/wallpaper.jpg
-docs/mockups/mock-*.png
+# screenshots, mock-ups and test backgrounds stay out of the repository (owner, 2026-10-28);
+# they live in library/制作/yuta-desk/, and the test harness still reads local files here
+docs/mockups/
