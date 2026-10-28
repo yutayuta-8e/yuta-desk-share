@@ -4,18 +4,18 @@ import { Glow } from '../light/Light'
 import { useFeed, useNow } from '../hooks'
 import { yd } from '../api'
 import { holidayName } from '@shared/holidays'
-import type { CalendarEvent } from '@shared/types'
+import { SUBS_CARD_STATE, type CalendarEvent } from '@shared/types'
 import { DOW, ymd, parseDay, addDays, hm, md, dayLabel, spanOf, rangeLabel, markOn } from './calendarDays'
 
 const get = () => yd.getCalendar()
 const on = yd.onCalendar
 
-/** A line under the month: an event (opens its card), or a renewal, money day or holiday (chooses its day). */
+/** A line under the month: an event (opens its card), or a money day or holiday (chooses its day). */
 type Item = {
   key: string
   day: Date
   order: number
-  kind: 'event' | 'long' | 'sub' | 'money' | 'hol'
+  kind: 'event' | 'long' | 'money' | 'hol'
   when: string
   title: string
   note?: string
@@ -29,7 +29,8 @@ type DayInfo = { short: CalendarEvent[]; long?: { e: CalendarEvent; first: boole
  * Month view, design 2 "constellation" (2026-10-28): six weeks always, the days of the months around
  * faint; events are up to two tiny lights, an event over several days is stars joined by a line,
  * a renewal is a four-point star above right, a money day a small yen above left, a holiday takes the
- * wallpaper's colour, today is a square. Below: what is coming, or the chosen day.
+ * wallpaper's colour, today is a square. Below: what is coming, or the chosen day. Subscriptions are
+ * not listed there (owner, 2026-10-28): the star at the top right opens their own card.
  */
 export function Calendar() {
   const data = useFeed(get, on)
@@ -111,9 +112,7 @@ export function Calendar() {
       out.push({ key: e.id, day: d, order: 2000, kind: 'long', when: rangeLabel(e), title: e.title, event: e })
     }
     for (const m of marks) {
-      if (!markOn(m, d)) continue
-      if (m.kind === 'sub') out.push({ key: `s:${m.name}:${k}`, day: d, order: 3000, kind: 'sub', when: `${label}更新`, title: `${m.name}（${m.month ? '毎年' : '毎月'}）`, note: m.note })
-      else out.push({ key: `m:${m.name}:${k}`, day: d, order: 4000, kind: 'money', when: `${label}引落`, title: m.name, note: m.note })
+      if (m.kind === 'money' && markOn(m, d)) out.push({ key: `m:${m.name}:${k}`, day: d, order: 4000, kind: 'money', when: `${label}引落`, title: m.name, note: m.note })
     }
     const hol = holidayName(k)
     if (hol) out.push({ key: `h:${k}`, day: d, order: coming ? 5000 : -1, kind: 'hol', when: `${label}祝日`, title: hol })
@@ -154,7 +153,7 @@ export function Calendar() {
 
   const lead = (it: Item) => {
     if (it.kind === 'long') return <i className="bar" />
-    if (it.kind === 'sub' || (it.event && it.event.id === open)) return <i className="lt-star" />
+    if (it.event && it.event.id === open) return <i className="lt-star" />
     if (it.kind === 'money') return '¥'
     return null
   }
@@ -172,11 +171,15 @@ export function Calendar() {
       <div ref={host} style={{ display: 'flex', flexDirection: 'column', height: '100%' }} data-nodrag>
         <div className="head">
           <Glow breathe className="month">{cursor.getMonth() + 1}月</Glow>
-          <div className="nav">
-            <button onClick={() => move(-1)} aria-label="前の月">‹</button>
-            {/* back to this month and today; shown only after moving away from it */}
-            {away && <button className="back" onClick={() => { setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); setSel(null) }}>今日に戻る</button>}
-            <button onClick={() => move(1)} aria-label="次の月">›</button>
+          <div className="head-r">
+            <div className="nav">
+              <button onClick={() => move(-1)} aria-label="前の月">‹</button>
+              {/* back to this month and today; shown only after moving away from it */}
+              {away && <button className="back" onClick={() => { setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); setSel(null) }}>今日に戻る</button>}
+              <button onClick={() => move(1)} aria-label="次の月">›</button>
+            </div>
+            {/* the subscriptions: the same star as the renewals on the days, no word (owner) */}
+            <button className={`subs-btn ${open === SUBS_CARD_STATE ? 'on' : ''}`} aria-label="サブスク" onClick={() => yd.calCardOpen({ mode: 'subs' })}><i className="lt-star" /></button>
           </div>
         </div>
         <div className="grid">

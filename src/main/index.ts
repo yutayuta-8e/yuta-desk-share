@@ -21,11 +21,11 @@ import { openTaskForm, closeTaskForm } from './taskForm'
 import { startMediaService, stopMediaService, mediaEvents, getMediaState, mediaCommand, playSoundCloud, mediaSeek, getMediaVolume, setMediaVolume } from './services/media'
 import { openPlayer, closePlayer, getPlayerWindow } from './playerWindow'
 import { readUsage } from './services/usage'
-import { getIcon, launch } from './services/launcher'
+import { getIcon, launch, readLogos } from './services/launcher'
 import { readCalendar, connectGoogle, hasCredentials, isConnected, getEventDetail, saveEvent, deleteEvent } from './services/calendar'
-import { startMarksWatcher, marksEvents } from './services/calendarMarks'
+import { startMarksWatcher, marksEvents, saveSub, deleteSub } from './services/calendarMarks'
 import { openCalCard, closeCalCard, placeCalCard } from './calCard'
-import type { WidgetId, CalCardRequest, EventDraft } from '../shared/types'
+import type { WidgetId, CalCardRequest, CalCardView, EventDraft, SubDraft } from '../shared/types'
 import { desktopReady } from './desktopLayer'
 import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -125,6 +125,7 @@ function registerDataIpc(): void {
   ipcMain.on('media-volume', (_e, v: number) => setMediaVolume(Number(v)))
   ipcMain.handle('get-media-volume', () => getMediaVolume())
   ipcMain.handle('get-icon', (_e, path: string, icon?: string) => getIcon(path, icon))
+  ipcMain.handle('launcher-logos', () => readLogos())
   ipcMain.handle('launch', (_e, path: string, args?: string) => launch(path, args))
   ipcMain.handle('get-calendar', () => { const [s, e] = calendarRange(); return readCalendar(s, e) })
   ipcMain.handle('calendar-status', () => ({ hasCredentials: hasCredentials(), connected: isConnected() }))
@@ -132,10 +133,14 @@ function registerDataIpc(): void {
   // the card beside the calendar: an event's details, or adding / editing one (main/calCard.ts)
   ipcMain.on('cal-card-open', (_e, r: CalCardRequest) => openCalCard(r))
   ipcMain.on('cal-card-close', () => closeCalCard())
-  ipcMain.on('cal-card-place', (_e, h: number, view: 'detail' | 'form') => placeCalCard(Number(h), view === 'form' ? 'form' : 'detail'))
+  const VIEWS: CalCardView[] = ['detail', 'form', 'subs', 'subform']
+  ipcMain.on('cal-card-place', (_e, h: number, view: CalCardView) => placeCalCard(Number(h), VIEWS.includes(view) ? view : 'detail'))
   ipcMain.handle('cal-event-detail', (_e, id: string) => getEventDetail(id))
   ipcMain.handle('cal-event-save', async (_e, d: EventDraft, id?: string) => { const r = await saveEvent(d, id); if (r.ok) void pushCalendar(); return r })
   ipcMain.handle('cal-event-delete', async (_e, id: string) => { const r = await deleteEvent(id); if (r.ok) void pushCalendar(); return r })
+  // the subscriptions card writes the Vault list (main/services/calendarMarks.ts); the calendar hears it through the watcher's event
+  ipcMain.handle('subs-save', (_e, d: SubDraft, original?: string) => saveSub(d, original))
+  ipcMain.handle('subs-delete', (_e, name: string) => deleteSub(String(name)))
   ipcMain.on('pet-move', (_e, x: number, y: number) => {
     const w = getWindow('pet')
     if (w) moveWindow(w, x, y)
@@ -174,6 +179,10 @@ function registerDataIpc(): void {
       const c = updateConfig((cfg) => { const t = cfg.launcher.items[index]; if (t) { if (g) t.glyph = g; else delete t.glyph } })
       broadcast('config', c)
     }
+    const setMask = (g: string) => {
+      const c = updateConfig((cfg) => { const t = cfg.launcher.items[index]; if (t) t.mask = g })
+      broadcast('config', c)
+    }
     Menu.buildFromTemplate([
       { label: `「${it.name}」を開く`, click: () => void launch(it.path, it.args) },
       { type: 'separator' },
@@ -182,6 +191,8 @@ function registerDataIpc(): void {
         ...GLYPHS.map((g) => ({ label: g.label, type: 'radio' as const, checked: it.glyph === g.id, click: () => setGlyph(g.id) }))
       ] },
       { label: '元のアイコンに戻す', enabled: !!it.glyph, click: () => setGlyph(undefined) },
+      // what this app shows while the logos are hidden for screenshots
+      { label: '伏せたときのマーク', submenu: GLYPHS.map((g) => ({ label: g.label, type: 'radio' as const, checked: it.mask === g.id, click: () => setMask(g.id) })) },
       { type: 'separator' },
       { label: `「${it.name}」をランチャーから外す`, click: () => {
         const c = updateConfig((cfg) => { cfg.launcher.items.splice(index, 1) })
@@ -209,7 +220,11 @@ function registerMenus(): void {
         label: 'アイコン',
         submenu: [
           { label: 'クリア（白抜き）', type: 'radio', checked: cfg.iconStyle === 'clear', click: () => { updateConfig((x) => { x.launcher.iconStyle = 'clear' }); broadcast('config', getConfig()) } },
-          { label: 'フルカラー', type: 'radio', checked: cfg.iconStyle === 'color', click: () => { updateConfig((x) => { x.launcher.iconStyle = 'color' }); broadcast('config', getConfig()) } }
+          { label: 'フルカラー', type: 'radio', checked: cfg.iconStyle === 'color', click: () => { updateConfig((x) => { x.launcher.iconStyle = 'color' }); broadcast('config', getConfig()) } },
+          { type: 'separator' },
+          // the apps' logos as lines (this PC only), or original marks in their place for screenshots to share
+          { label: 'ロゴを線で（ふだん）', type: 'radio', checked: cfg.iconSet !== 'mask', click: () => { updateConfig((x) => { x.launcher.iconSet = 'logo' }); broadcast('config', getConfig()) } },
+          { label: 'ロゴを伏せる（スクショ用）', type: 'radio', checked: cfg.iconSet === 'mask', click: () => { updateConfig((x) => { x.launcher.iconSet = 'mask' }); broadcast('config', getConfig()) } }
         ]
       }
     ]

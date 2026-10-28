@@ -1,5 +1,5 @@
 import { app, shell } from 'electron'
-import { existsSync, lstatSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getConfig } from '../config'
 import { bootLog } from '../boot'
@@ -7,6 +7,16 @@ import { execFile } from 'node:child_process'
 import type { LauncherIcon } from '../../shared/types'
 
 const cache = new Map<string, string | null>()
+
+/**
+ * The apps' own logos drawn as lines of light (2026-10-28): path data in the launcher's 48x48 box, by id.
+ * They are other companies' marks, so they live only on this PC, beside the config, and are never part of
+ * the repository; with the file missing every app simply shows its icon.
+ */
+export function readLogos(): Record<string, string> {
+  const f = join(app.getPath('userData'), 'launcher-logos.json')
+  try { return existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as Record<string, string>) : {} } catch { return {} }
+}
 
 /** Windows' own associated-icon extraction; more reliable than Electron's for some installers. */
 function extractAssociatedIcon(path: string): Promise<string | null> {

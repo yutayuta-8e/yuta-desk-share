@@ -21,7 +21,16 @@ export const GLYPHS: { id: string; label: string }[] = [
   { id: 'cat', label: 'ねこ' },
   { id: 'house', label: 'おうち' },
   { id: 'folder', label: 'フォルダ' },
-  { id: 'code', label: 'コード' }
+  { id: 'code', label: 'コード' },
+  // added 2026-10-28 for screenshots, where the apps' logos are hidden (original drawings, not logos)
+  { id: 'globe', label: '地球' },
+  { id: 'wand', label: 'まほうのつえ' },
+  { id: 'terminal', label: 'ターミナル' },
+  { id: 'robot', label: 'ロボット' },
+  { id: 'key', label: 'かぎ' },
+  { id: 'headset', label: 'ヘッドセット' },
+  { id: 'clapper', label: 'カチンコ' },
+  { id: 'box', label: 'はこ' }
 ]
 
 /** Numbers use the clock's own digits. */

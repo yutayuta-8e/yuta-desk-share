@@ -1,14 +1,17 @@
 // The card beside the calendar (design 2, 2026-10-28): one event's details, opened from the list under
-// the month, or the window for adding / editing an event. Like the task window it is an ordinary
-// top-level window, because widgets on the desktop may not get the keyboard. It is see-through.
+// the month, or the window for adding / editing an event; and the subscriptions, opened from the star
+// at the top right of the calendar. Like the task window it is an ordinary top-level window, because
+// widgets on the desktop may not get the keyboard. It is see-through.
 import { BrowserWindow, screen } from 'electron'
 import { join } from 'node:path'
 import { getWindow, boundsOf } from './windows'
-import type { Bounds, CalCardRequest } from '../shared/types'
+import { SUBS_CARD_STATE, type Bounds, type CalCardRequest, type CalCardView } from '../shared/types'
 
-type View = 'detail' | 'form'
+type View = CalCardView
 const GAP = 14 // between the card and the calendar; the detail card's line to its row crosses it
-const WIDTH: Record<View, number> = { detail: 350, form: 400 }
+const WIDTH: Record<View, number> = { detail: 350, form: 400, subs: 372, subform: 400 }
+// the lists go away when the owner looks elsewhere; the windows for typing stay until closed
+const closesOnBlur = (v: View) => v === 'detail' || v === 'subs'
 
 let card: BrowserWindow | null = null
 let anchor = 0 // screen y of the middle of the row the detail card belongs to
@@ -30,7 +33,7 @@ function tellCalendar(eventId: string | null): void {
 
 export function openCalCard(r: CalCardRequest): void {
   closeCalCard()
-  view = r.mode === 'detail' ? 'detail' : 'form'
+  view = r.mode === 'detail' ? 'detail' : r.mode === 'subs' ? 'subs' : 'form'
   shown = false
   if (r.mode === 'detail') anchor = calendarBounds().y + r.anchorY
   card = new BrowserWindow({
@@ -40,20 +43,20 @@ export function openCalCard(r: CalCardRequest): void {
   })
   const q = new URLSearchParams({ widget: 'calcard', mode: r.mode })
   if (r.mode === 'detail') q.set('id', r.eventId)
-  else q.set('date', r.date)
+  else if (r.mode === 'add') q.set('date', r.date)
   if (process.env.ELECTRON_RENDERER_URL) void card.loadURL(`${process.env.ELECTRON_RENDERER_URL}?${q}`)
   else void card.loadFile(join(__dirname, '../renderer/index.html'), { search: q.toString() })
   const me = card
-  // a detail card goes away when the owner looks elsewhere; the add / edit window stays until closed
-  me.on('blur', () => { if (card === me && view === 'detail') closeCalCard() })
+  me.on('blur', () => { if (card === me && closesOnBlur(view)) closeCalCard() })
   me.on('closed', () => { if (card === me) { card = null; tellCalendar(null) } })
-  tellCalendar(r.mode === 'detail' ? r.eventId : null)
+  tellCalendar(r.mode === 'detail' ? r.eventId : r.mode === 'subs' ? SUBS_CARD_STATE : null)
 }
 
 /**
  * The card's height is known only once it has drawn, so the renderer reports it (again whenever it
  * changes, and when the detail card turns into the edit window). Details sit level with their row;
- * the add / edit window stands on the calendar's bottom edge. Both go left of the calendar.
+ * the add / edit window stands on the calendar's bottom edge; the subscriptions hang from its top
+ * edge, beside the star they open from. All go left of the calendar.
  */
 export function placeCalCard(height: number, v: View): void {
   if (!card || card.isDestroyed()) return
@@ -68,6 +71,8 @@ export function placeCalCard(height: number, v: View): void {
   if (view === 'detail') {
     y = Math.min(Math.max(area.y, Math.round(anchor - 46)), area.y + area.height - h)
     tether = anchor - y
+  } else if (view === 'subs' || view === 'subform') {
+    y = Math.max(area.y, Math.min(cal.y, area.y + area.height - h))
   } else {
     y = Math.max(area.y, Math.min(cal.y + cal.height, area.y + area.height) - h)
   }

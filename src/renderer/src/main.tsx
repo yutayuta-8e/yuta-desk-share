@@ -32,7 +32,7 @@ if (new URLSearchParams(location.search).get('widget') === 'taskform') {
   const FormRoot = () => { useLightTheme(); return <TaskForm /> }
   root.render(<FormRoot />)
 } else if (new URLSearchParams(location.search).get('widget') === 'calcard') {
-  // the card beside the calendar: an event's details, or adding / editing one (main/calCard.ts)
+  // the card beside the calendar: an event's details, adding / editing one, or the subscriptions (main/calCard.ts)
   document.title = 'yuta-desk 予定'
   root.render(<CalCard />)
 } else if (new URLSearchParams(location.search).get('widget') === 'petsheet') {

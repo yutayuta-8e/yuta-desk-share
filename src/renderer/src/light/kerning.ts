@@ -27,6 +27,15 @@ const TUNE = (() => {
 })()
 const RIGHT_ROUND = '03689' // glyphs whose right side is a bowl
 const LEFT_ROUND = '0689' // glyphs whose left side is a bowl
+// Per pair, on top of everything above (glyph units, + opens): every one of the 100 pairs and the
+// colon pairs was looked at large, and these are the ones that read wrong. Mostly a top-right end
+// (5's bar, 6's hook, the loop of 9) running into a top-left start (1's flag, 7's bar, 9's loop).
+// Approved by the owner on a before/after sheet (2026-10-28); the other pairs stay as computed.
+const PAIR_TUNE: Record<string, number> = {
+  '51': 8, '61': 6, '69': 6, '97': 5, '24': 5, '59': 4, '87': 3,
+  '81': 2, '91': 2, '37': 2, '57': 2, '40': -3,
+  '7:': -6, ':1': -4, ':4': -3
+}
 
 type Profile = { left: (number | null)[]; right: (number | null)[]; minX: number; maxX: number }
 const cache = new Map<string, Profile>()
@@ -115,7 +124,7 @@ export function pairAdvance(l: string, r: string): number {
   if (colon) {
     // Next to the colon, measure from the digit's outer edge, not band by band: a digit that is
     // open on that side (3, 4, 7 ...) must not slide under the dots (bug seen at 19:38).
-    const o = T + L.maxX - R.minX
+    const o = T + L.maxX - R.minX + (PAIR_TUNE[key] ?? 0)
     pairCache.set(key, o)
     return o
   }
@@ -134,6 +143,8 @@ export function pairAdvance(l: string, r: string): number {
     if (lr !== null && rl !== null) need = Math.max(need, lr - rl + MIN_GAP)
   }
   if (isFinite(need)) o = Math.max(o, need)
+  // the hand-tuned pairs were judged on this final spacing, so they apply after the minimum
+  o += PAIR_TUNE[key] ?? 0
   pairCache.set(key, o)
   return o
 }

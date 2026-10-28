@@ -187,6 +187,12 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
 .v2-cal .nav button.back { font-size: 13px; }
 /* after moving to another month, the way back stays visible without hovering */
 .v2-cal .nav:has(.back) { opacity: 1; }
+.v2-cal .head-r { display: flex; align-items: center; gap: 2px; align-self: center; }
+/* the way to the subscriptions: the renewal star alone, no word (owner, 2026-10-28) */
+.v2-cal .subs-btn { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; background: none; cursor: pointer; opacity: 0.6; transition: opacity 160ms ease; }
+.v2-cal .subs-btn .lt-star { width: 11px; height: 11px; }
+.v2-cal .subs-btn:hover, .v2-cal .subs-btn.on { opacity: 1; }
+.v2-cal .subs-btn.on .lt-star { filter: drop-shadow(0 0 4px var(--halo)) drop-shadow(0 0 10px var(--halo-soft)); }
 /* design 2 "constellation" (2026-10-28): six weeks, the days of the months around faint, marks of light */
 .v2-cal .grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
 .v2-cal .dow { text-align: center; font-size: 13px; color: var(--ink-dim); padding-bottom: 6px; }
@@ -373,13 +379,15 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
 .gcard h1 { margin: 0; font-size: 17px; font-weight: 400; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
 .gcard label, .gcard .lab, .gcard .note, .gcard .sep, .gcard .err { text-shadow: 0 0 4px var(--halo-soft), 0 0 1px var(--halo-soft); }
 .gcard label { font-size: 13px; color: var(--ink-dim); display: flex; flex-direction: column; gap: 4px; }
-.gcard input[type=text], .gcard input[type=date], .gcard input[type=time], .gcard textarea, .gcard select {
+.gcard input[type=text], .gcard input[type=number], .gcard input[type=date], .gcard input[type=time], .gcard textarea, .gcard select {
   font: inherit; font-size: 16px; color: var(--ink); background: transparent; border: 0; border-radius: 0; outline: none; padding: 4px 2px;
   border-bottom: 1.5px solid color-mix(in srgb, var(--ink) 42%, transparent); text-shadow: 0 0 4px var(--halo-soft); color-scheme: dark; }
 :root[data-light='bright'] .gcard :is(input, textarea, select) { color-scheme: light; }
 .gcard :is(input, textarea, select):focus { border-bottom-color: var(--ink); box-shadow: 0 6px 8px -8px var(--halo); }
 .gcard :is(input, textarea, select):disabled { opacity: 0.4; }
 .gcard textarea { resize: none; line-height: 1.5; height: 3.4em; }
+.gcard input[type=number] { appearance: textfield; min-width: 0; }
+.gcard input[type=number]::-webkit-inner-spin-button, .gcard input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .gcard select option { background: #1a1422; color: #f4eef8; }
 .gcard .check { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); }
 .gcard input[type=checkbox] { appearance: none; width: 12px; height: 12px; margin: 0; border: 1.5px solid color-mix(in srgb, var(--ink) 65%, transparent); cursor: pointer; }
@@ -434,3 +442,26 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
 .calcard .d-rows .v { text-shadow: 0 0 4px var(--halo-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .calcard .detail-buttons button { font-size: 13.5px; padding: 4px 12px 6px; }
 .calcard .detail-buttons .quiet { margin-right: auto; }
+
+/* the subscriptions (2026-10-28, design 4 of 5): monthly and yearly apart, the day as a large number,
+   the nearest renewal first; prices in yen, the dollar price small under those paid in dollars */
+.subs { gap: 14px; }
+.subs .subs-top { display: flex; align-items: baseline; justify-content: space-between; }
+.subs .count, .subs .sh, .subs small { color: var(--ink-dim); text-shadow: 0 0 4px var(--halo-soft); }
+.subs .count, .subs .sh { font-size: 12.5px; }
+.subs .sec { display: flex; flex-direction: column; gap: 8px; }
+.subs .sec.rule { padding-top: 12px; }
+.subs .sr { display: grid; grid-template-columns: 3.1em 1fr auto; column-gap: 12px; align-items: baseline; cursor: pointer; }
+.subs .sr .num { font-size: 24px; line-height: 1; text-align: right; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
+.subs .sr .num.md { font-size: 19px; }
+.subs .sr .nm { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 15.5px; }
+.subs .sr .nm > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 0 4px var(--halo-soft); }
+.subs .sr .amt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 14px; white-space: nowrap; text-shadow: 0 0 4px var(--halo-soft); }
+.subs small { font-size: 12px; }
+.subs .sr:hover .nm > span, .subs .sr.on .nm > span { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo); }
+.subs .acts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+.subs .acts button { font-size: 13px; padding: 3px 12px 5px; }
+.subs .add { align-self: flex-start; font-size: 14px; color: var(--ink-dim); padding: 2px 0 4px; }
+.subs .add::after { display: none; }
+.subs .add:hover { color: var(--ink); }
+.subs .two .chips.unit { flex: none; padding-bottom: 4px; }

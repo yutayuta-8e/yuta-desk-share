@@ -8,7 +8,7 @@ export const PET_VARIANTS: { id: string; label: string; note: string }[] = [
   { id: 'drop', label: 'しずく', note: '頭のてっぺんがくるんと巻いたしずく形。向いている方へ先が傾く' },
   { id: 'ears', label: 'ねこみみ', note: '小さな耳がふたつ。いたずらの時はぴんと立つ' },
   { id: 'wisp', label: 'ひとだま', note: '下がしっぽになって流れる。歩かずにいつも少し浮いている' },
-  { id: 'sheet', label: 'シーツ', note: 'すそが4つの波、ほっぺにシャシャシャの線、L字の足が2本。足はゆらゆら、歩くと交互に上がる' },
+  { id: 'sheet', label: 'シーツ', note: 'すそが4つの波、ほっぺは大きな丸で輪郭がゆらゆら波打つ、ちょこんとした棒の足が2本。足はゆらゆら、歩くと交互に上がる' },
   { id: 'lantern', label: 'ちょうちん', note: '小さな光の玉を連れている。寝ると玉も足もとで休む' }
 ]
 
@@ -54,8 +54,8 @@ function geometry(size: number, p: PetPose, variant: string): Geo {
   // the wisp never quite touches the ground
   const float = variant === 'wisp' && !air && st !== 'sleep' ? 8 + Math.sin(p.t * 2.2) * 2 : 0
   const bob = air ? Math.sin(p.t * 4) * 4 : 0
-  // the wisp floats higher; the sheet stands on its legs
-  const bottom = size - 8 + p.jumpY + bob - float - (variant === 'wisp' ? 14 : variant === 'sheet' ? 12 : 0)
+  // the wisp floats higher; the sheet stands on its short legs
+  const bottom = size - 8 + p.jumpY + bob - float - (variant === 'wisp' ? 14 : variant === 'sheet' ? 8 : 0)
   return {
     cx: size / 2, bottom, bw, bh, top: bottom - bh * 0.85, ey: bottom - bh * 0.55 + p.eyeY, air,
     cheeky: st === 'tease' || p.flee,
@@ -132,7 +132,8 @@ function body(ctx: CanvasRenderingContext2D, variant: string, g: Geo, p: PetPose
       dome(ctx, g, 1.14)
       hem(ctx, cx + bw / 2, cx - bw / 2, bottom, 4, air ? 5 : 3.5, p.t, air)
       ctx.stroke()
-      // two L-shaped legs under the hem: they sway gently, step in turn when walking, dangle in the air
+      // two short stick legs under the hem (2026-10-28: the owner chose them over the L shape): they
+      // sway gently, step in turn when walking, dangle in the air
       const walk = p.state === 'walk'
       const asleep = p.state === 'sleep'
       const speed = walk ? 12 : air ? 4.5 : 2.2
@@ -142,11 +143,9 @@ function body(ctx: CanvasRenderingContext2D, variant: string, g: Geo, p: PetPose
         const swing = Math.sin(p.t * speed + phase) * amp
         const lift = walk ? Math.max(0, Math.sin(p.t * speed + phase)) * 3 : 0
         const x0 = cx + side * 10, y0 = bottom + 2
-        const x1 = x0 + swing, y1 = bottom + 12 - lift
         ctx.beginPath()
         ctx.moveTo(x0, y0)
-        ctx.quadraticCurveTo(x0 + swing * 0.2, (y0 + y1) / 2, x1, y1)
-        ctx.lineTo(x1 + p.dir * 5, y1)
+        ctx.lineTo(x0 + swing * 0.5, bottom + 8 - lift)
         ctx.stroke()
       }
       return
@@ -162,18 +161,27 @@ function body(ctx: CanvasRenderingContext2D, variant: string, g: Geo, p: PetPose
   }
 }
 
-/** Blush: three short slanted strokes on each cheek, floating a little and poking out past the body's edge. */
+/**
+ * Blush: a big round cheek on each side (2026-10-28: the owner chose round cheeks, much larger),
+ * its outline gently rippling, as if the light were wavering. The ripple drifts slowly round.
+ */
 function cheeks(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
   const float = Math.sin(p.t * 2.4) * 0.8
-  const y = g.ey + 7 + float
+  const y = g.ey + 7.5 + float
+  // three slow bumps: at this size more of them read as corners (a heptagon), not as a wave
+  const rx = 7, ry = 4.4, bumps = 3, depth = 0.07, steps = 72
   for (const side of [-1, 1]) {
-    const c = g.cx + side * (g.bw / 2 - 5) + p.dir * 1
-    for (const dx of [-5, 0, 5]) {
-      ctx.beginPath()
-      ctx.moveTo(c + dx - 2.2, y + 3.4)
-      ctx.lineTo(c + dx + 2.2, y - 3.4)
-      ctx.stroke()
+    const c = g.cx + side * (g.bw / 2 - 12) + p.dir * 1
+    const drift = p.t * 1.3 + (side > 0 ? 1.7 : 0)
+    ctx.beginPath()
+    for (let i = 0; i <= steps; i++) {
+      const a = (i / steps) * Math.PI * 2
+      const k = 1 + depth * Math.sin(a * bumps + drift)
+      const x = c + Math.cos(a) * rx * k, yy = y + Math.sin(a) * ry * k
+      if (i) ctx.lineTo(x, yy); else ctx.moveTo(x, yy)
     }
+    ctx.closePath()
+    ctx.stroke()
   }
 }
 

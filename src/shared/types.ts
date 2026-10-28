@@ -29,7 +29,12 @@ export type WidgetConfig = {
   card: boolean
 }
 
-export type LauncherItem = { name: string; path: string; args?: string; icon?: string; glyph?: string }
+/**
+ * glyph: a mark of light chosen instead of the icon. logo: the id of the app's own logo drawn as lines,
+ * kept only on this PC (<userData>/launcher-logos.json, never in the repository). mask: the original
+ * mark shown instead when the launcher is set to hide logos for screenshots (2026-10-28).
+ */
+export type LauncherItem = { name: string; path: string; args?: string; icon?: string; glyph?: string; logo?: string; mask?: string }
 
 export type ThemeMode = 'auto' | 'light' | 'dark'
 
@@ -38,7 +43,7 @@ export type Config = {
   theme: ThemeMode
   autoLaunch: boolean
   widgets: Record<WidgetId, WidgetConfig>
-  launcher: { rows: number; cols: number; iconStyle: 'clear' | 'color'; items: LauncherItem[]; openFoldersWith?: 'files' | 'explorer' }
+  launcher: { rows: number; cols: number; iconStyle: 'clear' | 'color'; items: LauncherItem[]; openFoldersWith?: 'files' | 'explorer'; iconSet?: 'logo' | 'mask' }
   /** marksFile: the Vault list of subscription renewals and money days (default: life/サブスクとお金の日.md) */
   calendar: { hiddenIds: string[]; refreshMinutes: number; marksFile?: string }
   tasks: { vaultTaskFile: string; daysAhead: number; style?: number }
@@ -120,8 +125,18 @@ export type EventDraft = {
   repeat: 'none' | 'weekly' | 'monthly' | 'yearly'
 }
 
-/** The card beside the calendar: an event's details (anchorY: the middle of its row, in the calendar window), or adding one. */
-export type CalCardRequest = { mode: 'detail'; eventId: string; anchorY: number } | { mode: 'add'; date: string }
+/**
+ * The card beside the calendar: an event's details (anchorY: the middle of its row, in the calendar
+ * window), adding one, or the subscriptions (2026-10-28).
+ */
+export type CalCardRequest = { mode: 'detail'; eventId: string; anchorY: number } | { mode: 'add'; date: string } | { mode: 'subs' }
+/** What the card shows now; main places it by this (and closes the two lists when the owner looks away). */
+export type CalCardView = 'detail' | 'form' | 'subs' | 'subform'
+/** What main tells the calendar while the subscriptions card is open (an event's card sends its id). */
+export const SUBS_CARD_STATE = ':subs'
+
+/** One subscription as the card adds / edits it: a line under 「サブスク」 in the Vault list. month unset = every month. */
+export type SubDraft = { name: string; month?: number; day: number; amount: number | null; currency: 'JPY' | 'USD' }
 
 export type UsageWindow = { percent: number; resetsAt: string | null; label: string }
 export type UsageService = {

@@ -4,6 +4,7 @@ import { useFeed } from '../hooks'
 import { useLightTheme } from '../light/Light'
 import type { EventDetail, EventDraft } from '@shared/types'
 import { ymd, md, hm, spanOf, dayLabel } from './calendarDays'
+import { SubsCard } from './SubsCard'
 
 const params = new URLSearchParams(location.search)
 const getCal = () => yd.getCalendar()
@@ -30,11 +31,16 @@ function firstTime(day: string): string {
   return day === ymd(now) ? toTime(Math.min(now.getHours() + 1, 23) * 60) : '10:00'
 }
 
-/**
- * The card beside the calendar (design 2, 2026-10-28): an event's details, opened from the list under
- * the month, or the window for adding / editing one, with the rarer fields folded away. See-through.
- */
+/** The card beside the calendar: an event's (below), or the subscriptions (SubsCard.tsx). */
 export function CalCard() {
+  return params.get('mode') === 'subs' ? <SubsCard /> : <EventCard />
+}
+
+/**
+ * The event card (design 2, 2026-10-28): an event's details, opened from the list under the month,
+ * or the window for adding / editing one, with the rarer fields folded away. See-through.
+ */
+function EventCard() {
   useLightTheme()
   const [view, setView] = useState<'detail' | 'form'>(params.get('mode') === 'detail' ? 'detail' : 'form')
   const [detail, setDetail] = useState<EventDetail | null>(null)

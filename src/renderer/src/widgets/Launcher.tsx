@@ -64,12 +64,22 @@ function toClear(src: string): Promise<string> {
   })
 }
 
-function App({ item, index, clear, poked, dragging, dropHere, onPress }: {
-  item: LauncherItem; index: number; clear: boolean; poked: boolean; dragging: boolean; dropHere: boolean
+/**
+ * What a tile shows (2026-10-28): normally the app's logo as lines when this PC has one, else a mark
+ * the owner chose, else the app's own icon. With the logos hidden for screenshots, only original marks
+ * (the item's mask, else its mark) or the first letter: never a logo or an icon.
+ */
+function App({ item, index, clear, masked, logos, poked, dragging, dropHere, onPress }: {
+  item: LauncherItem; index: number; clear: boolean; masked: boolean; logos: Record<string, string>
+  poked: boolean; dragging: boolean; dropHere: boolean
   onPress: (e: ReactMouseEvent, index: number) => void
 }) {
   const [icon, setIcon] = useState<string | null>(null)
+  const logo = !masked && item.logo ? logos[item.logo] : undefined
+  const mark = masked ? item.mask ?? item.glyph : item.glyph
+  const needIcon = !masked && !logo && !mark
   useEffect(() => {
+    if (!needIcon) { setIcon(null); return }
     let alive = true
     void yd.getIcon(item.path, item.icon).then(async (r) => {
       if (!alive) return
@@ -77,12 +87,12 @@ function App({ item, index, clear, poked, dragging, dropHere, onPress }: {
       setIcon(clear ? await toClear(r.dataUrl) : r.dataUrl)
     })
     return () => { alive = false }
-  }, [item.path, item.icon, clear])
+  }, [item.path, item.icon, clear, needIcon])
   return (
     <div className={`app ${poked ? 'poked' : ''} ${dragging ? 'dragging' : ''} ${dropHere ? 'drop-here' : ''}`} data-nodrag data-slot={index}
       onMouseDown={(e) => onPress(e, index)}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); yd.launcherItemMenu(index) }} title={item.path}>
-      <div className="tile">{item.glyph ? <GlyphIcon id={item.glyph} />
+      <div className="tile">{logo ? <LineIcon d={logo} /> : mark ? <GlyphIcon id={mark} />
         : icon ? <img src={icon} alt="" draggable={false} /> : <span style={{ fontSize: 18 }}>{item.name.slice(0, 1)}</span>}</div>
       <div className="lbl ellipsis">{item.name}</div>
     </div>
@@ -101,7 +111,11 @@ function GlyphIcon({ id }: { id: string }) {
     )
   }
   const d = GLYPH_PATHS[id]
-  if (!d) return null
+  return d ? <LineIcon d={d} /> : null
+}
+
+/** Lines of light in the launcher's 48x48 box: a mark, or an app's logo traced as lines. */
+function LineIcon({ d }: { d: string }) {
   return (
     <svg className="glyph" viewBox="0 0 48 48" width={42} height={42} aria-hidden="true">
       <path d={d} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} />
@@ -122,6 +136,9 @@ export function Launcher() {
   const rows = cfg?.launcher.rows ?? 3
   const cols = cfg?.launcher.cols ?? 3
   const items = cfg?.launcher.items ?? []
+  // the logos drawn as lines live on this PC only (main reads them from beside the config)
+  const [logos, setLogos] = useState<Record<string, string>>({})
+  useEffect(() => { void yd.launcherLogos().then((l) => setLogos(l ?? {})) }, [])
   const per = rows * cols
   const pages = useMemo(() => {
     const out: LauncherItem[][] = []
@@ -221,6 +238,7 @@ export function Launcher() {
             {pg.map((it, j) => {
               const index = i * per + j
               return <App key={it.path + it.name} item={it} index={index} clear={cfg?.launcher.iconStyle !== 'color'}
+                masked={cfg?.launcher.iconSet === 'mask'} logos={logos}
                 poked={poked === index} dragging={drag?.from === index}
                 dropHere={(!!drag && drag.to === index && drag.from !== index) || dropAt === index} onPress={onPress} />
             })}
