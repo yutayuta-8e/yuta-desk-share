@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BatteryInfo, Bounds, CalendarData, Config, LauncherIcon, MediaState, TaskList, ThemeInfo, UsageData, WallpaperInfo, WidgetId } from '../shared/types'
+import type { BatteryInfo, Bounds, CalCardRequest, CalendarData, Config, EventDetail, EventDraft, LauncherIcon, MediaState, TaskList, ThemeInfo, UsageData, WallpaperInfo, WidgetId } from '../shared/types'
 
 type Listener<T> = (payload: T) => void
 function on<T>(channel: string, fn: Listener<T>): () => void {
@@ -31,11 +31,24 @@ const api = {
   mediaCommand: (cmd: 'toggle' | 'next' | 'prev' | 'close') => ipcRenderer.send('media-command', cmd),
   mediaSoundCloud: () => ipcRenderer.send('media-soundcloud'),
   onMedia: (fn: Listener<MediaState>) => on('media', fn),
+  playerOpen: () => ipcRenderer.send('player-open'),
+  playerClose: () => ipcRenderer.send('player-close'),
+  mediaSeek: (sec: number) => ipcRenderer.send('media-seek', sec),
+  mediaVolume: (v: number) => ipcRenderer.send('media-volume', v),
+  getMediaVolume: (): Promise<number | null> => ipcRenderer.invoke('get-media-volume'),
   getIcon: (path: string, icon?: string): Promise<LauncherIcon> => ipcRenderer.invoke('get-icon', path, icon),
   launch: (path: string, args?: string): Promise<string> => ipcRenderer.invoke('launch', path, args),
   getCalendar: (): Promise<CalendarData> => ipcRenderer.invoke('get-calendar'),
   calendarStatus: (): Promise<{ hasCredentials: boolean; connected: boolean }> => ipcRenderer.invoke('calendar-status'),
   calendarConnect: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('calendar-connect'),
+  calCardOpen: (r: CalCardRequest) => ipcRenderer.send('cal-card-open', r),
+  calCardClose: () => ipcRenderer.send('cal-card-close'),
+  calCardPlace: (height: number, view: 'detail' | 'form') => ipcRenderer.send('cal-card-place', height, view),
+  onCalCardTether: (fn: Listener<number | null>) => on('cal-card-tether', fn),
+  onCalCardState: (fn: Listener<string | null>) => on('cal-card-state', fn),
+  calEventDetail: (id: string): Promise<EventDetail | null> => ipcRenderer.invoke('cal-event-detail', id),
+  calEventSave: (d: EventDraft, id?: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('cal-event-save', d, id),
+  calEventDelete: (id: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('cal-event-delete', id),
   dragStart: (id: WidgetId) => ipcRenderer.send('drag-start', id),
   dragEnd: () => ipcRenderer.send('drag-end'),
   setEditMode: (on: boolean) => ipcRenderer.send('edit-mode-set', on),

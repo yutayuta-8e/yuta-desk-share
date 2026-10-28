@@ -26,8 +26,17 @@ export function windowAt(x: number, y: number): { win: BrowserWindow; bounds: Bo
   return null
 }
 
+// windows outside the widget set that still want the shared feeds (wallpaper, theme, config...):
+// the full-screen player
+const extraTargets = new Set<BrowserWindow>()
+export function addBroadcastTarget(win: BrowserWindow): void {
+  extraTargets.add(win)
+  win.on('closed', () => extraTargets.delete(win))
+}
+
 export function broadcast(channel: string, payload: unknown): void {
   for (const w of windows.values()) if (!w.isDestroyed()) w.webContents.send(channel, payload)
+  for (const w of extraTargets) if (!w.isDestroyed()) w.webContents.send(channel, payload)
 }
 
 function clampToScreen(x: number, y: number, w: number, h: number): { x: number; y: number } {

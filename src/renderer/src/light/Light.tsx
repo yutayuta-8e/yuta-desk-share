@@ -7,7 +7,7 @@ import { yd } from '../api'
 import { timeOfDay } from './timeOfDay'
 
 /** Windows that have breathing elements; the others skip the timer entirely. */
-const BREATHES = new Set(['clock', 'calendar'])
+const BREATHES = new Set(['clock', 'calendar', 'player'])
 
 /**
  * v2 "呼吸する光": every glyph is light drawn on the wallpaper, never a surface.
@@ -76,8 +76,10 @@ export function Glow({ children, breathe = false, className, title }: { children
 /**
  * Digits written as a single stroke of light. A digit that changes is re-written (the stroke
  * travels its path in 1.2 s); unchanged digits stay put. The colon breathes.
+ * With `kern`, the ink sits exactly 3 strokes in from each side of the box. `pin={false}` lays out
+ * "HH:MM" by plain kerning too (no fixed box), for times aligned by their ink edge.
  */
-export function StrokeDigits({ text, size, stroke = 2.4, breathe = true, write = true, kern = false, run = 0 }: { text: string; size: number; stroke?: number; breathe?: boolean; write?: boolean; kern?: boolean; run?: number }) {
+export function StrokeDigits({ text, size, stroke = 2.4, breathe = true, write = true, kern = false, pin = true, run = 0 }: { text: string; size: number; stroke?: number; breathe?: boolean; write?: boolean; kern?: boolean; pin?: boolean; run?: number }) {
   const id = useId().replace(/:/g, '')
   const s = size / DIGIT_BOX.h
   const sw = stroke / s
@@ -89,7 +91,7 @@ export function StrokeDigits({ text, size, stroke = 2.4, breathe = true, write =
     // and the hours / minutes are kerned away from it, so the colon never moves; digits that stay
     // glide to their new kerned place when the time changes (see .lt-kern).
     let xs: number[], boxW: number
-    if (/^\d\d:\d\d$/.test(text)) {
+    if (pin && /^\d\d:\d\d$/.test(text)) {
       ({ xs, boxW } = clockLayout(text))
     } else {
       const lay = kernLayout(text)
@@ -112,10 +114,12 @@ export function StrokeDigits({ text, size, stroke = 2.4, breathe = true, write =
   }
   const vbY = 6, vbH = 118
   const w = vbW * s, h = vbH * s
+  // at 16-20 px the clock's 2-stroke dots read as a heavy blob (1:38 looks like 1838); small times use 1.25
+  const dot = sw * (size < 60 ? 1.25 : 2)
   const body = (cls: string) => items.map((it, i) => it.ch === ':'
     ? <g key={it.key} style={{ transform: `translate(${it.x + sw * 3}px,0px)` }} className={kern ? 'lt-colon lt-kern' : 'lt-colon'}>
-        <circle cx={20} cy={46} r={sw * 2} />
-        <circle cx={20} cy={92} r={sw * 2} />
+        <circle cx={20} cy={46} r={dot} />
+        <circle cx={20} cy={92} r={dot} />
       </g>
     : <path key={it.key} d={it.d} pathLength={1}
         className={`${write ? 'lt-write' : ''} ${kern ? 'lt-kern' : ''} ${cls}`}

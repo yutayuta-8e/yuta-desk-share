@@ -39,7 +39,8 @@ export type Config = {
   autoLaunch: boolean
   widgets: Record<WidgetId, WidgetConfig>
   launcher: { rows: number; cols: number; iconStyle: 'clear' | 'color'; items: LauncherItem[]; openFoldersWith?: 'files' | 'explorer' }
-  calendar: { hiddenIds: string[]; refreshMinutes: number }
+  /** marksFile: the Vault list of subscription renewals and money days (default: life/サブスクとお金の日.md) */
+  calendar: { hiddenIds: string[]; refreshMinutes: number; marksFile?: string }
   tasks: { vaultTaskFile: string; daysAhead: number; style?: number }
   battery: { refreshSeconds: number }
   usage: { refreshMinutes: number; hidden?: string[] }
@@ -78,17 +79,49 @@ export type CalendarEvent = {
   color: string
   title: string
   start: string // ISO or YYYY-MM-DD
-  end: string
+  end: string // all-day: the day after the last (Google's exclusive end)
   allDay: boolean
+  location?: string
+  recurring?: boolean
 }
+
+/**
+ * A day that comes back every month (month unset) or every year: a subscription renewal ('sub') or a
+ * money day such as a card payment ('money'). Read from the Vault list, not from Google.
+ */
+export type CalendarMark = { kind: 'sub' | 'money'; name: string; day: number; month?: number; note?: string }
 
 export type CalendarData = {
   connected: boolean
-  calendars: { id: string; name: string; color: string; hidden: boolean }[]
+  calendars: { id: string; name: string; color: string; hidden: boolean; writable?: boolean; primary?: boolean }[]
   events: CalendarEvent[]
+  marks: CalendarMark[]
   updatedAt: number
   error?: string
 }
+
+export type EventRepeat = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'other'
+
+/** One event in full, fetched when its card opens. reminders: minutes before (the calendar's own when the event uses them). */
+export type EventDetail = CalendarEvent & { description?: string; reminders: number[]; repeat: EventRepeat; htmlLink?: string; writable: boolean }
+
+/** What the add / edit window sends. Dates are YYYY-MM-DD, times HH:MM (ignored when allDay). */
+export type EventDraft = {
+  calendarId: string
+  title: string
+  startDate: string
+  endDate: string
+  allDay: boolean
+  startTime: string
+  endTime: string
+  location: string
+  description: string
+  reminder: number | null
+  repeat: 'none' | 'weekly' | 'monthly' | 'yearly'
+}
+
+/** The card beside the calendar: an event's details (anchorY: the middle of its row, in the calendar window), or adding one. */
+export type CalCardRequest = { mode: 'detail'; eventId: string; anchorY: number } | { mode: 'add'; date: string }
 
 export type UsageWindow = { percent: number; resetsAt: string | null; label: string }
 export type UsageService = {

@@ -1,36 +1,44 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Glass } from '../Glass'
 import { Glow } from '../light/Light'
 import { useFeed, useNow } from '../hooks'
 import { yd } from '../api'
+import { holidayName } from '@shared/holidays'
 import type { CalendarEvent } from '@shared/types'
+import { DOW, ymd, parseDay, addDays, hm, md, dayLabel, spanOf, rangeLabel, markOn } from './calendarDays'
 
 const get = () => yd.getCalendar()
 const on = yd.onCalendar
-const DOW = ['日', '月', '火', '水', '木', '金', '土']
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/** A line under the month: an event (opens its card), or a renewal, money day or holiday (chooses its day). */
+type Item = {
+  key: string
+  day: Date
+  order: number
+  kind: 'event' | 'long' | 'sub' | 'money' | 'hol'
+  when: string
+  title: string
+  note?: string
+  event?: CalendarEvent
 }
-function eventDay(e: CalendarEvent): string { return e.allDay ? e.start.slice(0, 10) : ymd(new Date(e.start)) }
-/** "10/28(水) 14:00", "今日 23:30", "明日 終日" */
-function whenLabel(e: CalendarEvent, now: Date): string {
-  const d = e.allDay ? new Date(e.start.slice(0, 10) + 'T00:00:00') : new Date(e.start)
-  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const day0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-  const diff = Math.round((day0 - today0) / 86400000)
-  const day = diff <= 0 ? '今日' : diff === 1 ? '明日' : `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})`
-  return `${day} ${e.allDay ? '終日' : hm(e.start)}`
-}
-function hm(iso: string): string { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
 
-/** Month view: days are soft points of text, today is a breathing ring, events are tiny lights. */
+/** What one day holds: short events, the long event passing through it (drawn as a line of stars). */
+type DayInfo = { short: CalendarEvent[]; long?: { e: CalendarEvent; first: boolean; last: boolean } }
+
+/**
+ * Month view, design 2 "constellation" (2026-10-28): six weeks always, the days of the months around
+ * faint; events are up to two tiny lights, an event over several days is stars joined by a line,
+ * a renewal is a four-point star above right, a money day a small yen above left, a holiday takes the
+ * wallpaper's colour, today is a square. Below: what is coming, or the chosen day.
+ */
 export function Calendar() {
   const data = useFeed(get, on)
   const now = useNow(60_000)
   const [cursor, setCursor] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1))
-  // null = the next few events; a day = that day's events (click the same day again to go back)
+  // null = what is coming; a day = that day (click the same day again to go back)
   const [sel, setSel] = useState<string | null>(null)
+  // the event whose card is open beside the calendar (main tells us; it closes on its own)
+  const [open, setOpen] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [msg, setMsg] = useState('')
   const host = useRef<HTMLDivElement>(null)
@@ -38,6 +46,8 @@ export function Calendar() {
   const lock = useRef(0)
   const cursorRef = useRef(cursor)
   cursorRef.current = cursor
+
+  useEffect(() => yd.onCalCardState(setOpen), [])
 
   // A horizontal swipe turns exactly one month (then ignores the rest of that swipe).
   useEffect(() => {
@@ -62,26 +72,62 @@ export function Calendar() {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const byDay = useMemo(() => {
-    const m = new Map<string, CalendarEvent[]>()
-    for (const e of data?.events ?? []) { const k = eventDay(e); if (!m.has(k)) m.set(k, []); m.get(k)!.push(e) }
+  const events = useMemo(() => data?.events ?? [], [data])
+  const marks = useMemo(() => data?.marks ?? [], [data])
+  const today = parseDay(ymd(now))
+
+  const days = useMemo(() => {
+    const m = new Map<string, DayInfo>()
+    const at = (k: string) => { let v = m.get(k); if (!v) { v = { short: [] }; m.set(k, v) } return v }
+    for (const e of events) {
+      const [a, b] = spanOf(e)
+      if (b > a) {
+        // when two long events overlap, the first one keeps the line
+        for (let d = a; d <= b; d = addDays(d, 1)) { const v = at(ymd(d)); if (!v.long) v.long = { e, first: +d === +a, last: +d === +b } }
+      } else at(ymd(a)).short.push(e)
+    }
     return m
-  }, [data])
+  }, [events])
+
   const cells = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
-    const start = new Date(first); start.setDate(1 - first.getDay())
-    const n = Math.ceil((first.getDay() + new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()) / 7) * 7
-    return Array.from({ length: n }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
+    const start = addDays(first, -first.getDay())
+    return Array.from({ length: 42 }, (_, i) => addDays(start, i))
   }, [cursor])
-  const today = ymd(now)
-  const selEvents = sel ? byDay.get(sel) ?? [] : []
-  // the next three events in the coming two weeks (still running or yet to start)
-  const upcoming = useMemo(() => {
-    const t = now.getTime(), limit = t + 14 * 86400000
-    const startOf = (e: CalendarEvent) => (e.allDay ? new Date(e.start.slice(0, 10) + 'T00:00:00').getTime() : new Date(e.start).getTime())
-    const endOf = (e: CalendarEvent) => (e.allDay ? new Date((e.end || e.start).slice(0, 10) + 'T00:00:00').getTime() + (e.end && e.end.slice(0, 10) !== e.start.slice(0, 10) ? 0 : 86400000) : new Date(e.end || e.start).getTime())
-    return (data?.events ?? []).filter((e) => endOf(e) > t && startOf(e) < limit).sort((a, b) => startOf(a) - startOf(b)).slice(0, 3)
-  }, [data, now])
+
+  /** The lines for one day; `coming` words them from today ("明日 14:00"), otherwise for the chosen day. */
+  const itemsOf = (d: Date, coming: boolean): Item[] => {
+    const k = ymd(d)
+    const label = coming ? `${dayLabel(d, now)} ` : ''
+    const out: Item[] = []
+    const info = days.get(k)
+    for (const e of info?.short ?? []) {
+      if (coming && !e.allDay && new Date(e.end || e.start) < now) continue
+      out.push({ key: e.id, day: d, order: e.allDay ? 0 : 1 + new Date(e.start).getHours() * 60 + new Date(e.start).getMinutes(), kind: 'event', when: label + (e.allDay ? '終日' : hm(e.start)), title: e.title, event: e })
+    }
+    // a long event is listed once: on its first day, or today when it is already under way
+    if (info?.long && (!coming || info.long.first || +d === +today)) {
+      const e = info.long.e
+      out.push({ key: e.id, day: d, order: 2000, kind: 'long', when: rangeLabel(e), title: e.title, event: e })
+    }
+    for (const m of marks) {
+      if (!markOn(m, d)) continue
+      if (m.kind === 'sub') out.push({ key: `s:${m.name}:${k}`, day: d, order: 3000, kind: 'sub', when: `${label}更新`, title: `${m.name}（${m.month ? '毎年' : '毎月'}）`, note: m.note })
+      else out.push({ key: `m:${m.name}:${k}`, day: d, order: 4000, kind: 'money', when: `${label}引落`, title: m.name, note: m.note })
+    }
+    const hol = holidayName(k)
+    if (hol) out.push({ key: `h:${k}`, day: d, order: coming ? 5000 : -1, kind: 'hol', when: `${label}祝日`, title: hol })
+    return out.sort((a, b) => a.order - b.order)
+  }
+
+  // the coming two weeks, at most four lines
+  const coming = useMemo(() => {
+    const out: Item[] = []
+    for (let i = 0; i < 14 && out.length < 4; i++) out.push(...itemsOf(addDays(today, i), true))
+    return out.slice(0, 4)
+  }, [days, marks, now])
+  const chosen = sel ? itemsOf(parseDay(sel), false) : []
+
   const away = cursor.getFullYear() !== now.getFullYear() || cursor.getMonth() !== now.getMonth() || sel !== null
   const move = (n: number) => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1))
   const connect = async () => {
@@ -90,6 +136,36 @@ export function Calendar() {
     setConnecting(false); setMsg(r.ok ? '' : r.message)
   }
   const canConnect = data && !data.connected && data.error !== 'credentials 未設置'
+  const canAdd = !!data?.connected
+
+  const choose = (d: Date, toggle = true) => {
+    const k = ymd(d)
+    if (d.getMonth() !== cursor.getMonth()) setCursor(new Date(d.getFullYear(), d.getMonth(), 1))
+    setSel((cur) => (toggle && cur === k ? null : k))
+  }
+  // events open their card level with their row; the rest choose their day
+  const pick = (it: Item, e: MouseEvent<HTMLDivElement>) => {
+    if (it.event) {
+      const r = e.currentTarget.getBoundingClientRect()
+      yd.calCardOpen({ mode: 'detail', eventId: it.event.id, anchorY: r.top + r.height / 2 })
+    } else choose(it.day, false)
+  }
+  const addOn = (d: Date) => { if (canAdd) yd.calCardOpen({ mode: 'add', date: ymd(d) }) }
+
+  const lead = (it: Item) => {
+    if (it.kind === 'long') return <i className="bar" />
+    if (it.kind === 'sub' || (it.event && it.event.id === open)) return <i className="lt-star" />
+    if (it.kind === 'money') return '¥'
+    return null
+  }
+  const row = (it: Item) => (
+    <div key={it.key} className={`row k-${it.kind} ${it.event && it.event.id === open ? 'on' : ''}`} onClick={(e) => pick(it, e)}>
+      <span className="lead">{lead(it)}</span>
+      <span className="when">{it.when}</span>
+      {it.kind === 'hol' ? <span className="t hol-name">{it.title}</span> : <Glow>{it.title}</Glow>}
+      {it.note && <span className="note">{it.note}</span>}
+    </div>
+  )
 
   return (
     <Glass id="calendar" className="v2-cal">
@@ -107,24 +183,33 @@ export function Calendar() {
           {DOW.map((d) => <span key={d} className="dow">{d}</span>)}
           {cells.map((d) => {
             const k = ymd(d)
-            if (d.getMonth() !== cursor.getMonth()) return <span key={k} />
-            const evs = byDay.get(k)?.length ?? 0
+            const info = days.get(k)
+            const col = d.getDay()
+            const dots = Math.min(2, info?.short.length ?? 0)
+            const sub = marks.some((m) => m.kind === 'sub' && markOn(m, d))
+            const money = marks.some((m) => m.kind === 'money' && markOn(m, d))
+            const cls = ['day', d.getMonth() !== cursor.getMonth() ? 'other' : '', +d === +today ? 'today' : '', k === sel ? 'sel' : '', holidayName(k) ? 'hol' : ''].join(' ')
             return (
-              <span key={k} className={`day lt-soft ${k === today ? 'today' : ''} ${k === sel ? 'sel' : ''}`} onClick={() => setSel((cur) => (cur === k ? null : k))}>
-                {d.getDate()}
-                {evs > 0 && <i className="ev" />}
+              <span key={k} className={cls} onClick={() => choose(d)} onDoubleClick={() => { choose(d, false); addOn(d) }}>
+                <span className="n lt-soft">{d.getDate()}</span>
+                {info?.long && <>
+                  {!info.long.first && <i className={`line l ${col === 0 ? 'edge' : ''}`} />}
+                  {!info.long.last && <i className={`line r ${col === 6 ? 'edge' : ''}`} />}
+                  <i className="node lt-star" />
+                </>}
+                {dots > 0 && <span className={`dots ${info?.long ? 'aside' : ''}`}>{Array.from({ length: info?.long ? 1 : dots }, (_, i) => <i key={i} />)}</span>}
+                {sub && <i className="sub lt-star" />}
+                {money && <span className="yen lt-soft">¥</span>}
               </span>
             )
           })}
         </div>
         <div className="events">
-          {sel
-            ? selEvents.slice(0, 6).map((e) => (
-                <div key={e.id} className="row"><span className="tm">{e.allDay ? '終日' : hm(e.start)}</span><Glow>{e.title}</Glow></div>
-              ))
-            : upcoming.map((e) => (
-                <div key={e.id} className="row upcoming"><span className="when">{whenLabel(e, now)}</span><Glow>{e.title}</Glow></div>
-              ))}
+          {sel && <div className="selh">{md(parseDay(sel))}</div>}
+          {(sel ? chosen : coming).map(row)}
+          {sel && canAdd && (
+            <div className="row add" onClick={() => addOn(parseDay(sel))}><span className="lead">＋</span><span className="t">この日に予定を足す</span></div>
+          )}
         </div>
         {canConnect && (
           <div className="connect">

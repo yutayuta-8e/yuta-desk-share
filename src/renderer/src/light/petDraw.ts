@@ -280,7 +280,7 @@ export function drawPet(ctx: CanvasRenderingContext2D, size: number, variant: st
     ctx.globalAlpha = 1; ctx.shadowBlur = 0
   }
   if (p.state === 'sleep') {
-    ctx.fillStyle = ink.core; ctx.font = '400 15px "Zen Kurenaido", sans-serif'
+    ctx.fillStyle = ink.core; ctx.font = '400 15px "YD Latin", "Zen Kurenaido", sans-serif'
     ctx.shadowColor = ink.halo; ctx.shadowBlur = 8
     const z = (p.t % 2) / 2
     ctx.globalAlpha = 1 - z; ctx.fillText('z', g.cx + 26, g.top - 6 - z * 18); ctx.globalAlpha = 1

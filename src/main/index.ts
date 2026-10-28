@@ -18,11 +18,14 @@ import { createTray, refreshTray } from './tray'
 import { readBattery } from './services/battery'
 import { readTasks, startTaskWatcher, taskEvents, markTaskDone, addTask, editTask, deleteTask, listTrash, restoreTask, type TaskDraft } from './services/tasks'
 import { openTaskForm, closeTaskForm } from './taskForm'
-import { startMediaService, stopMediaService, mediaEvents, getMediaState, mediaCommand, playSoundCloud } from './services/media'
+import { startMediaService, stopMediaService, mediaEvents, getMediaState, mediaCommand, playSoundCloud, mediaSeek, getMediaVolume, setMediaVolume } from './services/media'
+import { openPlayer, closePlayer, getPlayerWindow } from './playerWindow'
 import { readUsage } from './services/usage'
 import { getIcon, launch } from './services/launcher'
-import { readCalendar, connectGoogle, hasCredentials, isConnected } from './services/calendar'
-import type { WidgetId } from '../shared/types'
+import { readCalendar, connectGoogle, hasCredentials, isConnected, getEventDetail, saveEvent, deleteEvent } from './services/calendar'
+import { startMarksWatcher, marksEvents } from './services/calendarMarks'
+import { openCalCard, closeCalCard, placeCalCard } from './calCard'
+import type { WidgetId, CalCardRequest, EventDraft } from '../shared/types'
 import { desktopReady } from './desktopLayer'
 import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -68,11 +71,16 @@ async function pushCalendar(): Promise<void> { const [s, e] = calendarRange(); b
 function startServices(): void {
   startThemeService()
   startTaskWatcher()
+  startMarksWatcher()
+  marksEvents.on('changed', () => void pushCalendar())
   wallpaperEvents.on('changed', (info) => broadcast('wallpaper', info))
   themeEvents.on('changed', (t) => broadcast('theme', t))
   taskEvents.on('changed', (t) => broadcast('tasks', t))
   startMediaService()
-  mediaEvents.on('changed', (m) => getWindow('media')?.webContents.send('media', m))
+  mediaEvents.on('changed', (m) => {
+    getWindow('media')?.webContents.send('media', m)
+    getPlayerWindow()?.webContents.send('media', m)
+  })
   batteryTimer = setInterval(() => void pushBattery(), getConfig().battery.refreshSeconds * 1000)
   usageTimer = setInterval(() => void pushUsage(), getConfig().usage.refreshMinutes * 60 * 1000)
   // usage is not asked while the owner is away; ask as soon as they are back. Logged so the log
@@ -110,11 +118,24 @@ function registerDataIpc(): void {
   ipcMain.handle('task-restore', async (_e, content: string) => { const r = await restoreTask(content); refreshTasks(); return r })
   ipcMain.on('media-command', (_e, cmd: string) => { if (['toggle', 'next', 'prev', 'close'].includes(cmd)) mediaCommand(cmd as 'toggle') })
   ipcMain.on('media-soundcloud', () => playSoundCloud())
+  // the full-screen player (opened from the media widget)
+  ipcMain.on('player-open', () => openPlayer())
+  ipcMain.on('player-close', () => closePlayer())
+  ipcMain.on('media-seek', (_e, sec: number) => mediaSeek(Number(sec)))
+  ipcMain.on('media-volume', (_e, v: number) => setMediaVolume(Number(v)))
+  ipcMain.handle('get-media-volume', () => getMediaVolume())
   ipcMain.handle('get-icon', (_e, path: string, icon?: string) => getIcon(path, icon))
   ipcMain.handle('launch', (_e, path: string, args?: string) => launch(path, args))
   ipcMain.handle('get-calendar', () => { const [s, e] = calendarRange(); return readCalendar(s, e) })
   ipcMain.handle('calendar-status', () => ({ hasCredentials: hasCredentials(), connected: isConnected() }))
   ipcMain.handle('calendar-connect', async () => { const r = await connectGoogle(); if (r.ok) void pushCalendar(); return r })
+  // the card beside the calendar: an event's details, or adding / editing one (main/calCard.ts)
+  ipcMain.on('cal-card-open', (_e, r: CalCardRequest) => openCalCard(r))
+  ipcMain.on('cal-card-close', () => closeCalCard())
+  ipcMain.on('cal-card-place', (_e, h: number, view: 'detail' | 'form') => placeCalCard(Number(h), view === 'form' ? 'form' : 'detail'))
+  ipcMain.handle('cal-event-detail', (_e, id: string) => getEventDetail(id))
+  ipcMain.handle('cal-event-save', async (_e, d: EventDraft, id?: string) => { const r = await saveEvent(d, id); if (r.ok) void pushCalendar(); return r })
+  ipcMain.handle('cal-event-delete', async (_e, id: string) => { const r = await deleteEvent(id); if (r.ok) void pushCalendar(); return r })
   ipcMain.on('pet-move', (_e, x: number, y: number) => {
     const w = getWindow('pet')
     if (w) moveWindow(w, x, y)
@@ -230,7 +251,12 @@ app.whenReady().then(async () => {
   logLine('widgets created')
 })
 
-app.on('second-instance', () => applyWidgetEnabled())
+// starting the app again shows the widgets; with --player it opens the full-screen player
+// (a shortcut can point at it; the checks use it too)
+app.on('second-instance', (_e, argv) => {
+  applyWidgetEnabled()
+  if (argv.includes('--player')) openPlayer()
+})
 app.on('window-all-closed', () => { /* keep running in the tray */ })
 app.on('before-quit', () => {
   stopMediaService()

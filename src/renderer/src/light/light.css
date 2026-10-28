@@ -18,15 +18,23 @@
   --halo: color-mix(in oklab, var(--accent) 62%, #ffffff);
   --halo-soft: color-mix(in srgb, var(--halo) 60%, transparent);
   --breath: 0.7; /* 0.45..1, driven at 10 fps by useLightTheme (all windows share the phase) */
+  /* a holiday in the calendar: the wallpaper's colour */
+  --holi: var(--halo);
+  --holi-glow: var(--accent);
+  --star: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
 }
 :root[data-light='bright'] {
   --ink: #1c1730;
   --ink-dim: rgba(28, 23, 48, 0.6);
   --halo: #ffffff;
   --halo-soft: rgba(255, 255, 255, 0.75);
+  --holi: color-mix(in oklab, var(--accent) 70%, #000000);
+  --holi-glow: #ffffff;
 }
 
-html, body, #root { font-family: 'Zen Kurenaido', 'M PLUS Rounded 1c', 'Yu Gothic UI', sans-serif; color: var(--ink); }
+/* 'YD Latin' (light/latinFont.ts: Handlee) holds only letters and digits, so kana and kanji fall through
+   to Zen Kurenaido; numbers read at a glance, so full-height (lining) figures where a font has both */
+html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c', 'Yu Gothic UI', sans-serif; font-variant-numeric: lining-nums; color: var(--ink); }
 .glass, .glass.nocard { box-shadow: none !important; }
 .glass.nocard .content { text-shadow: none; transition: none; }
 .glass { --gather: 0; transition: --gather 420ms cubic-bezier(0.32, 0.72, 0, 1); }
@@ -48,6 +56,9 @@ html, body, #root { font-family: 'Zen Kurenaido', 'M PLUS Rounded 1c', 'Yu Gothi
   will-change: opacity; opacity: var(--breath);
   pointer-events: none;
 }
+
+/* a four-point star of light (the calendar's renewals and long events) */
+.lt-star { display: inline-block; background: var(--ink); filter: drop-shadow(0 0 3px var(--halo)); clip-path: var(--star); }
 
 /* single-stroke digits */
 .lt-digits { position: relative; display: inline-block; }
@@ -157,19 +168,6 @@ html, body, #root { font-family: 'Zen Kurenaido', 'M PLUS Rounded 1c', 'Yu Gothi
 .glass.editing .v2-task.editing .t { cursor: grab; }
 .glass.editing.v2-tasks.s3 .list::before { display: none; } /* the constellation line would run through the actions */
 
-/* the input window for a task (an ordinary window: a dark panel for legible typing) */
-.taskform { position: fixed; inset: 6px; box-sizing: border-box; padding: 18px 20px; border-radius: 16px; background: rgba(22, 17, 30, 0.95); color: #f4eef8; font-family: 'Zen Kurenaido', 'Yu Gothic UI', sans-serif; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 1px rgba(214, 190, 232, 0.35), 0 10px 30px rgba(0, 0, 0, 0.5); }
-.taskform h1 { margin: 0; font-size: 17px; font-weight: 400; color: #f4eef8; text-shadow: 0 0 8px rgba(214, 190, 232, 0.6); }
-.taskform label { font-size: 13px; color: #b9aec6; display: flex; flex-direction: column; gap: 4px; }
-.taskform input[type=text], .taskform input[type=date] { font: inherit; font-size: 16px; color: #f4eef8; background: transparent; border: 0; border-bottom: 1.5px solid rgba(244, 238, 248, 0.45); padding: 4px 2px; outline: none; color-scheme: dark; }
-.taskform input:focus { border-bottom-color: #f4eef8; box-shadow: 0 6px 8px -8px rgba(214, 190, 232, 0.9); }
-.taskform .row { display: flex; gap: 18px; align-items: flex-end; }
-.taskform .check { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: #f4eef8; }
-.taskform .buttons { margin-top: auto; display: flex; justify-content: flex-end; gap: 10px; }
-.taskform button { font: inherit; font-size: 15px; border-radius: 999px; padding: 5px 16px; cursor: pointer; border: 1.5px solid rgba(244, 238, 248, 0.6); background: transparent; color: #f4eef8; }
-.taskform button.primary { background: #f4eef8; color: #16111e; border-color: #f4eef8; }
-.taskform button:disabled { opacity: 0.5; cursor: default; }
-.taskform .err { font-size: 13px; color: #ffb4c6; }
 
 /* a done task bursts into points of light */
 .v2-burst { position: fixed; width: 0; height: 0; pointer-events: none; z-index: 5; }
@@ -189,18 +187,51 @@ html, body, #root { font-family: 'Zen Kurenaido', 'M PLUS Rounded 1c', 'Yu Gothi
 .v2-cal .nav button.back { font-size: 13px; }
 /* after moving to another month, the way back stays visible without hovering */
 .v2-cal .nav:has(.back) { opacity: 1; }
+/* design 2 "constellation" (2026-10-28): six weeks, the days of the months around faint, marks of light */
 .v2-cal .grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
 .v2-cal .dow { text-align: center; font-size: 13px; color: var(--ink-dim); padding-bottom: 6px; }
 .v2-cal .day { position: relative; aspect-ratio: 1; display: grid; place-items: center; font-size: 15px; cursor: pointer; }
-.v2-cal .day.other { color: var(--ink-dim); opacity: 0.45; }
-.v2-cal .day.today::before { content: ''; position: absolute; inset: 14%; border-radius: 50%; border: 1.5px solid var(--halo); box-shadow: 0 0 10px var(--accent), inset 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent); opacity: calc(0.5 + var(--breath) * 0.5); will-change: opacity; }
-.v2-cal .day.sel:not(.today)::before { content: ''; position: absolute; inset: 22%; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--ink) 55%, transparent); }
-.v2-cal .day .ev { position: absolute; bottom: 12%; width: 3px; height: 3px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 4px var(--halo); }
-.v2-cal .events { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; overflow: auto; flex: 1; min-height: 0; }
-.v2-cal .events .row { display: flex; gap: 10px; }
-.v2-cal .events .tm { color: var(--ink-dim); flex: none; width: 46px; }
-.v2-cal .events .when { color: var(--ink-dim); flex: none; min-width: 6.6em; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-.v2-cal .events .row > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-cal .day > .n { position: relative; z-index: 2; }
+.v2-cal .day.other > * { opacity: 0.3; }
+/* today: a true square on all four sides (owner); the chosen day the same, thinner */
+.v2-cal .day.today::before { content: ''; position: absolute; inset: 14%; border: 1.5px solid var(--halo); box-shadow: 0 0 10px var(--accent), inset 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent); opacity: calc(0.5 + var(--breath) * 0.5); will-change: opacity; }
+.v2-cal .day.sel:not(.today)::before { content: ''; position: absolute; inset: 18%; border: 1px solid color-mix(in srgb, var(--ink) 60%, transparent); }
+/* a holiday takes the wallpaper's colour, with a soft glow behind the number */
+.v2-cal .day.hol > .n { color: var(--holi); text-shadow: 0 0 6px var(--holi-glow), 0 0 14px var(--halo-soft); }
+.v2-cal .day.hol::after { content: ''; position: absolute; inset: 24%; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 50%, transparent), transparent 70%); }
+.v2-cal .day.hol.other::after { opacity: 0.3; }
+/* events: up to two tiny lights (beside the star on a day of a long event) */
+.v2-cal .dots { position: absolute; bottom: 13%; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 2; }
+.v2-cal .dots.aside { left: 73%; }
+.v2-cal .dots i { width: 3px; height: 3px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 4px var(--halo); }
+/* an event over several days: stars joined by a line, running on across weeks and months */
+.v2-cal .line { position: absolute; bottom: 13%; height: 1px; background: color-mix(in srgb, var(--ink) 75%, transparent); box-shadow: 0 0 4px var(--halo); z-index: 1; }
+.v2-cal .line.l { left: 0; right: 50%; }
+.v2-cal .line.r { left: 50%; right: 0; }
+.v2-cal .line.l.edge { left: -10px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 75%, transparent) 40%); }
+.v2-cal .line.r.edge { right: -10px; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 75%, transparent) 60%, transparent); }
+.v2-cal .node { position: absolute; bottom: calc(13% - 2.5px); left: 50%; margin-left: -3px; width: 6px; height: 6px; z-index: 2; }
+/* a renewal: a four-point star above right; a money day: a small yen above left */
+.v2-cal .sub { position: absolute; top: 12%; right: 13%; width: 9px; height: 9px; z-index: 2; }
+.v2-cal .yen { position: absolute; top: 9%; left: 13%; font-size: 10.5px; line-height: 1; z-index: 2; font-family: 'Zen Kurenaido', sans-serif; }
+/* the lines under the month: what is coming, or the chosen day */
+.v2-cal .events { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; overflow: hidden; flex: 1; min-height: 0; }
+.v2-cal .events .row { position: relative; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; cursor: pointer; }
+.v2-cal .events .lead { width: 14px; flex: none; display: inline-flex; justify-content: center; align-self: center; font-family: 'Zen Kurenaido', sans-serif; text-shadow: 0 0 4px var(--halo-soft); }
+.v2-cal .events .lead .lt-star { width: 9px; height: 9px; }
+.v2-cal .events .lead .bar { position: relative; width: 13px; height: 1px; background: var(--ink); box-shadow: 0 0 4px var(--halo); }
+.v2-cal .events .lead .bar::after { content: ''; position: absolute; left: 50%; top: -2.5px; margin-left: -3px; width: 6px; height: 6px; background: var(--ink); clip-path: var(--star); }
+.v2-cal .events .when { color: var(--ink-dim); flex: none; min-width: 6.4em; letter-spacing: 0.02em; }
+.v2-cal .events .row > .lt-soft, .v2-cal .events .row > .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-cal .events .hol-name { color: var(--holi); text-shadow: 0 0 6px var(--holi-glow); }
+.v2-cal .events .note { margin-left: auto; padding-left: 8px; flex: none; color: var(--ink-dim); }
+.v2-cal .events .selh { font-size: 13px; color: var(--ink-dim); }
+.v2-cal .events .row.add { color: var(--ink-dim); }
+.v2-cal .events .row.add:hover { color: var(--ink); text-shadow: 0 0 6px var(--halo-soft); }
+/* the row whose card is open: brighter, and a line of light from the calendar's edge to its star
+   (the card draws the rest of the line, at the same height) */
+.v2-cal .events .row.on .when { color: var(--ink); }
+.v2-cal .events .row.on::before { content: ''; position: absolute; left: -14px; width: 18px; top: 50%; height: 1px; background: color-mix(in srgb, var(--ink) 75%, transparent); box-shadow: 0 0 4px var(--halo); }
 .v2-cal .connect { margin-top: auto; }
 .v2-cal .connect button { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; text-shadow: 0 0 6px var(--halo-soft); }
 
@@ -292,3 +323,114 @@ html, body, #root { font-family: 'Zen Kurenaido', 'M PLUS Rounded 1c', 'Yu Gothi
 @keyframes pet-bubble-in { from { opacity: 0; transform: translateY(6px) scale(0.7); } to { opacity: 1; transform: none; } }
 @keyframes pet-bubble-out { to { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .pet-bubble, .pet-bubble.leaving { animation: none; } }
+/* ---------- full-screen player (design 10, 2026-10-27): the wallpaper, and everything on the bottom edge ---------- */
+.player { position: fixed; inset: 0; overflow: hidden; background: #000; user-select: none; color: var(--ink); }
+.player .pl-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; } /* Windows' "fill" */
+.player .pl-art { position: absolute; left: 48px; height: 200px; width: auto; max-width: 360px; display: block; }
+.player .pl-text { position: absolute; left: 50%; bottom: 138px; transform: translateX(-50%); width: max-content; max-width: min(30vw, 460px); text-align: center; }
+.player .pl-title { margin: 0; font-size: 30px; font-weight: 400; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft), 0 0 22px var(--halo-soft); }
+.player .pl-artist { margin-top: 6px; font-size: 16px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 6px var(--halo-soft); }
+/* the date: right-aligned on the line's end; the trailing letter-spacing hangs outside (negative margin) */
+.player .pl-date { position: absolute; transform: translateY(-100%); font-size: 19px; letter-spacing: 0.3em; margin-right: -0.3em; white-space: nowrap; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft), 0 0 22px var(--halo-soft); }
+.player .pl-clock { position: absolute; }
+.player .pl-clock .lt-digits { display: block; }
+.player .pl-seek { position: absolute; left: 48px; right: 48px; bottom: 66px; height: 28px; cursor: pointer; touch-action: none; }
+.player .pl-seek.off { cursor: default; }
+.player .pl-seek .lt-line { position: absolute; left: 0; right: 0; top: 13px; }
+.player .pl-dot { position: absolute; top: 13.75px; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px var(--halo), 0 0 16px var(--halo), 0 0 30px var(--halo-soft); pointer-events: none; }
+/* the times show only while the pointer is on the seek line (owner, 2026-10-27) */
+.player .pl-times { position: absolute; inset: 0; opacity: 0; transition: opacity 240ms ease; pointer-events: none; }
+.player .pl-seek:hover .pl-times, .player .pl-seek.dragging .pl-times { opacity: 1; }
+/* text, not drawn digits (owner, 2026-10-28): the baseline sits about where the drawn digits stood */
+.player .pl-elapsed, .player .pl-total { position: absolute; bottom: 21px; font-size: 16px; line-height: 1; white-space: nowrap; text-shadow: 0 0 3px var(--halo), 0 0 9px var(--halo-soft); }
+.player .pl-elapsed { transform: translateX(-50%); }
+.player .pl-total { right: 0; color: var(--ink-dim); }
+.player .pl-controls { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
+.player .media-btn { width: 40px; height: 40px; padding: 6px; }
+.player .media-btn.big { width: 52px; height: 52px; padding: 6px; }
+.player .media-btn:disabled { opacity: 0.35; cursor: default; }
+.player .pl-side { position: absolute; right: 42px; bottom: 25px; display: flex; align-items: center; gap: 8px; }
+.player .pl-side .media-btn { width: 30px; height: 30px; padding: 6px; }
+.player .pl-vol { display: flex; align-items: center; gap: 12px; }
+.player .pl-vol > svg { width: 20px; height: 20px; overflow: visible; fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px var(--halo-soft)) drop-shadow(0 0 1px var(--halo)); }
+.player .pl-vol-line { position: relative; width: 96px; height: 20px; cursor: pointer; touch-action: none; }
+.player .pl-vol-line .lt-line { position: absolute; left: 0; right: 0; top: 9.25px; }
+.player .pl-knob { position: absolute; top: 10px; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px var(--halo), 0 0 14px var(--halo-soft); pointer-events: none; }
+.player .pl-vol.off { opacity: 0.35; }
+.player .pl-vol.off .pl-vol-line { cursor: default; }
+.player .pl-sc { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); font-size: 18px; }
+
+/* ---------- see-through cards (owner, 2026-10-28): the calendar's event card and the add / edit windows, the task window ----------
+   square, a very thin 10 % film, no blur, frame or drop shadow; two straight lines of light a fifth of
+   the width long, fading toward the middle: along the top from the right corner, along the bottom
+   from the left. Buttons and choices have no box, only a line underneath that fades toward both ends. */
+.gcard { position: relative; box-sizing: border-box; padding: 18px 20px; background: color-mix(in srgb, #120c18 10%, transparent); color: var(--ink);
+  display: flex; flex-direction: column; gap: 12px; font-family: 'YD Latin', 'Zen Kurenaido', 'Yu Gothic UI', sans-serif; font-variant-numeric: lining-nums; }
+.gcard::before, .gcard::after { content: ''; position: absolute; width: 20%; height: 1.5px; pointer-events: none; filter: drop-shadow(0 0 3px var(--halo)); }
+.gcard::before { top: 0; right: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 80%, transparent)); }
+.gcard::after { bottom: 0; left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 80%, transparent), transparent); }
+/* with nothing blurred behind it, small text carries its own glow, as the widgets do */
+.gcard h1 { margin: 0; font-size: 17px; font-weight: 400; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
+.gcard label, .gcard .lab, .gcard .note, .gcard .sep, .gcard .err { text-shadow: 0 0 4px var(--halo-soft), 0 0 1px var(--halo-soft); }
+.gcard label { font-size: 13px; color: var(--ink-dim); display: flex; flex-direction: column; gap: 4px; }
+.gcard input[type=text], .gcard input[type=date], .gcard input[type=time], .gcard textarea, .gcard select {
+  font: inherit; font-size: 16px; color: var(--ink); background: transparent; border: 0; border-radius: 0; outline: none; padding: 4px 2px;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--ink) 42%, transparent); text-shadow: 0 0 4px var(--halo-soft); color-scheme: dark; }
+:root[data-light='bright'] .gcard :is(input, textarea, select) { color-scheme: light; }
+.gcard :is(input, textarea, select):focus { border-bottom-color: var(--ink); box-shadow: 0 6px 8px -8px var(--halo); }
+.gcard :is(input, textarea, select):disabled { opacity: 0.4; }
+.gcard textarea { resize: none; line-height: 1.5; height: 3.4em; }
+.gcard select option { background: #1a1422; color: #f4eef8; }
+.gcard .check { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); }
+.gcard input[type=checkbox] { appearance: none; width: 12px; height: 12px; margin: 0; border: 1.5px solid color-mix(in srgb, var(--ink) 65%, transparent); cursor: pointer; }
+.gcard input[type=checkbox]:checked { background: var(--ink); box-shadow: 0 0 6px var(--halo); }
+.gcard button { position: relative; flex: none; white-space: nowrap; font: inherit; font-size: 15px; padding: 5px 14px 7px; border: 0; background: none; color: var(--ink); cursor: pointer; text-shadow: 0 0 4px var(--halo-soft); }
+.gcard button::after, .gcard .chip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 65%, transparent), transparent); }
+.gcard button.primary { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
+.gcard button.primary::after { height: 2px; background: linear-gradient(90deg, transparent, var(--ink), transparent); filter: drop-shadow(0 0 4px var(--halo)); }
+.gcard button.quiet { color: var(--ink-dim); padding-left: 4px; padding-right: 4px; }
+.gcard button.quiet::after { display: none; }
+.gcard button:hover { text-shadow: 0 0 8px var(--halo), 0 0 2px var(--halo); }
+.gcard button:disabled { opacity: 0.5; cursor: default; }
+.gcard .buttons { margin-top: 4px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.gcard .note { font-size: 12px; color: var(--ink-dim); }
+.gcard .err { font-size: 13px; color: #ffb4c6; }
+.gcard .rule { border-top: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); }
+/* choices (reminder, repeat): words with a line underneath; the chosen one bright */
+.gcard .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.gcard .chip { position: relative; font: inherit; font-size: 13px; padding: 3px 8px 5px; border: 0; background: none; color: var(--ink-dim); cursor: pointer; text-shadow: 0 0 4px var(--halo-soft); }
+.gcard .chip::after { height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 32%, transparent), transparent); }
+.gcard .chip.on { color: var(--ink); text-shadow: 0 0 6px var(--halo); }
+.gcard .chip.on::after { height: 1.5px; background: linear-gradient(90deg, transparent, var(--ink), transparent); filter: drop-shadow(0 0 3px var(--halo)); }
+.gcard .field { display: flex; flex-direction: column; gap: 6px; }
+.gcard .lab { font-size: 13px; color: var(--ink-dim); }
+
+/* the task window */
+.taskform { height: 100vh; }
+.taskform .row { display: flex; gap: 18px; align-items: flex-end; }
+
+/* the calendar's card window: the card, and on the right the gap the line to the event's row crosses */
+.calcard { position: relative; width: 100vw; }
+.calcard .gcard { width: calc(100vw - 14px); }
+.calcard .tether { position: absolute; right: 0; width: 15px; height: 1px; background: color-mix(in srgb, var(--ink) 75%, transparent); box-shadow: 0 0 4px var(--halo); }
+.calcard .two { display: flex; gap: 10px; align-items: flex-end; }
+.calcard .two label { flex: 1; min-width: 0; }
+.calcard .two .sep { color: var(--ink-dim); padding-bottom: 6px; }
+.calcard .two .check { flex: none; padding-bottom: 6px; }
+/* the accordion: one line when closed (with what is inside), the extra fields when open */
+.calcard .acc { padding-top: 10px; }
+.calcard .acc-head { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; padding: 0; color: var(--ink); width: 100%; }
+.calcard .acc-head::after { display: none; }
+.calcard .chev { display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: rotate(-45deg); margin: 0 4px 0 1px; transition: transform 200ms ease; }
+.calcard .acc.open .chev { transform: translateY(-2px) rotate(45deg); }
+.calcard .acc-sum { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+.calcard .acc-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+/* the detail card */
+.calcard .d-when { font-size: 13px; color: var(--ink-dim); text-shadow: 0 0 4px var(--halo-soft); }
+.calcard .d-title { font-size: 22px; line-height: 1.2; margin-top: -6px; overflow-wrap: anywhere; }
+.calcard .d-time { font-size: 15px; margin-top: -6px; }
+.calcard .d-rows { display: grid; grid-template-columns: 5.4em 1fr; row-gap: 9px; column-gap: 10px; font-size: 14px; line-height: 1.45; padding-top: 12px; }
+.calcard .d-rows .v { text-shadow: 0 0 4px var(--halo-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.calcard .detail-buttons button { font-size: 13.5px; padding: 4px 12px 6px; }
+.calcard .detail-buttons .quiet { margin-right: auto; }

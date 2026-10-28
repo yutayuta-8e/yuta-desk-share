@@ -109,7 +109,9 @@ export function startMediaService(): void {
       if (!line) continue
       try {
         if (process.env.YD_MEDIA_IGNORE_APPS) continue // checks only: behave as if no app were playing
-        const s = JSON.parse(line) as Smtc
+        const o = JSON.parse(line) as Smtc | { volume: number }
+        if ('volume' in o) { volumeWaiters.shift()?.(o.volume >= 0 ? o.volume : null); continue }
+        const s = o
         if (s.active && 'thumbnail' in s) smtcThumb = s.thumbnail ?? null
         smtc = s
         if (s.active && s.app && s.app !== iconFor) { iconFor = s.app; void resolveAppIcon(s.app) }
@@ -168,4 +170,44 @@ export function mediaCommand(cmd: 'toggle' | 'next' | 'prev' | 'close'): void {
     return
   }
   if (current.kind === 'app') bridge?.stdin.write(`${cmd}\n`)
+}
+
+const ourPlayer = () => (current.kind === 'soundcloud' && player && !player.isDestroyed() ? player : null)
+
+/** Moves whatever is shown to `sec` seconds into the track. */
+export function mediaSeek(sec: number): void {
+  if (!Number.isFinite(sec) || sec < 0) return
+  const p = ourPlayer()
+  if (p) { void p.webContents.executeJavaScript(`window.ydCommand && window.ydCommand('seek', ${Math.round(sec * 1000)})`); return }
+  if (current.kind === 'app') bridge?.stdin.write(`seek ${sec.toFixed(1)}\n`)
+}
+
+// getvolume answers come back on the bridge's stdout as {"volume": x}, in the order they were asked
+const volumeWaiters: ((v: number | null) => void)[] = []
+
+/**
+ * The volume of what is playing, 0..1: our SoundCloud player's own, or the playing app's slider in
+ * the Windows volume mixer (never the master volume). null when it cannot be read.
+ */
+export function getMediaVolume(): Promise<number | null> {
+  const p = ourPlayer()
+  if (p) {
+    return p.webContents.executeJavaScript('new Promise((r) => window.yd ? window.yd.getVolume((v) => r(v)) : r(null))')
+      .then((v: unknown) => (typeof v === 'number' ? v / 100 : null), () => null)
+  }
+  if (current.kind !== 'app' || !bridge) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const done = (v: number | null) => { clearTimeout(t); resolve(v) }
+    const t = setTimeout(() => { const i = volumeWaiters.indexOf(done); if (i >= 0) volumeWaiters.splice(i, 1); resolve(null) }, 5000)
+    volumeWaiters.push(done)
+    bridge!.stdin.write('getvolume\n')
+  })
+}
+
+export function setMediaVolume(v: number): void {
+  if (!Number.isFinite(v)) return
+  const x = Math.max(0, Math.min(1, v))
+  const p = ourPlayer()
+  if (p) { void p.webContents.executeJavaScript(`window.ydCommand && window.ydCommand('volume', ${Math.round(x * 100)})`); return }
+  if (current.kind === 'app') bridge?.stdin.write(`volume ${x.toFixed(3)}\n`)
 }

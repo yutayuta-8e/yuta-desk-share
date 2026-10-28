@@ -39,7 +39,7 @@ export function TaskForm() {
   }
 
   return (
-    <form className="taskform" onSubmit={save}>
+    <form className="taskform gcard" onSubmit={save}>
       <h1>{mode === 'edit' ? 'タスクを編集' : 'タスクを追加'}</h1>
       <label>タスク名<input ref={input} id="task-name" type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></label>
       <div className="row">

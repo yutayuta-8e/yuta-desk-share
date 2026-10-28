@@ -1,10 +1,12 @@
-import { app } from 'electron'
+import { app, screen } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { Config, WidgetConfig, WidgetId } from '../shared/types'
 
 const DEFAULT_VAULT_TASK = join(homedir(), 'library', '資料', 'ai-context', 'admin', 'タスク.md')
+
+const CALENDAR_H = 490
 
 function w(x: number, y: number, wd: number, h: number, extra: Partial<WidgetConfig> = {}): WidgetConfig {
   return { enabled: true, x, y, w: wd, h, opacity: 0.14, blur: 28, scale: 1, card: true, ...extra }
@@ -21,7 +23,8 @@ export function defaultConfig(): Config {
       usage: w(40, 190, 340, 320, { card: false }),
       tasks: w(40, 520, 420, 300, { card: false }),
       launcher: w(1196, 40, 300, 380, { card: false }),
-      calendar: w(1156, 440, 340, 410, { card: false }),
+      // six weeks always and four rows below them (design 2, 2026-10-28)
+      calendar: w(1156, 422, 340, CALENDAR_H, { card: false }),
       pet: w(600, 700, 300, 210, { opacity: 0, blur: 0 }),
       // bottom centre, just above the taskbar (owner, 2026-10-27)
       media: w(538, 812, 460, 96, { card: false })
@@ -66,6 +69,14 @@ export function loadConfig(): Config {
       }
       for (const id of Object.keys(def.widgets) as WidgetId[]) {
         merged.widgets[id] = { ...def.widgets[id], ...((raw.widgets ?? {})[id] ?? {}) }
+      }
+      // the calendar grew (six weeks always): it grows downward, and moves up only as far as it must
+      // to stay above the taskbar (upward it would run under the launcher)
+      const cal = merged.widgets.calendar
+      if (cal.h < CALENDAR_H) {
+        const area = screen.getPrimaryDisplay().workArea
+        cal.h = CALENDAR_H
+        cal.y = Math.max(area.y, Math.min(cal.y, area.y + area.height - CALENDAR_H))
       }
       current = merged
     } else {

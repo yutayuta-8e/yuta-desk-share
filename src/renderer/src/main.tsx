@@ -17,13 +17,24 @@ import { Catcher } from './widgets/Catcher'
 import { PetSheet } from './widgets/PetSheet'
 import { Media } from './widgets/Media'
 import { TaskForm } from './widgets/TaskForm'
+import { CalCard } from './widgets/CalCard'
+import { Player } from './widgets/Player'
+import { addLatinFont } from './light/latinFont'
 
-const widgets: Record<string, () => React.JSX.Element> = { clock: Clock, calendar: Calendar, tasks: Tasks, battery: Battery, usage: Usage, launcher: Launcher, pet: Pet, media: Media, catcher: Catcher }
+// player: the full-screen view opened from the media widget (an ordinary window, see main/playerWindow.ts)
+const widgets: Record<string, () => React.JSX.Element> = { clock: Clock, calendar: Calendar, tasks: Tasks, battery: Battery, usage: Usage, launcher: Launcher, pet: Pet, media: Media, catcher: Catcher, player: Player }
+addLatinFont()
 const root = createRoot(document.getElementById('root')!)
 if (new URLSearchParams(location.search).get('widget') === 'taskform') {
   // the small input window for adding / editing a task (an ordinary window, not a desktop widget)
   document.title = 'yuta-desk タスク'
-  root.render(<TaskForm />)
+  // a see-through card: it follows the wallpaper's colour like the widgets
+  const FormRoot = () => { useLightTheme(); return <TaskForm /> }
+  root.render(<FormRoot />)
+} else if (new URLSearchParams(location.search).get('widget') === 'calcard') {
+  // the card beside the calendar: an event's details, or adding / editing one (main/calCard.ts)
+  document.title = 'yuta-desk 予定'
+  root.render(<CalCard />)
 } else if (new URLSearchParams(location.search).get('widget') === 'petsheet') {
   // dev-only preview of the pet looks (scripts/pet-sheet.js); runs without the app's bridge
   document.title = 'yuta-desk petsheet'
