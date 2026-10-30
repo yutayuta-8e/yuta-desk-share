@@ -111,7 +111,7 @@ function MonthView({ data, month, setMonth, thisMonth, tab, setTab, cat, setCat,
         <span className="count">{sums.count}件</span>
       </div>
       <div className="m-sum">
-        <div className="m-net"><LightAmount n={sums.net} size={30} /><span className="yen">円</span></div>
+        <div className="m-net"><LightAmount n={sums.net} size={32} /><span className="yen">円</span></div>
         <div className="m-side">
           {before !== null && <span>{isNow ? '先月の同じ日まで' : '前の月'} {yen(before)}</span>}
           {sums.refund > 0 && <span>返金 {yen(sums.refund)}</span>}

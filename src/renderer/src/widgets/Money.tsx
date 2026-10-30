@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Glass } from '../Glass'
 import { Glow, StrokeDigits } from '../light/Light'
-import { drawBlink, drawLashes, eyeColour, paintEye, unitArea, type EyeDesign, type GlassEye } from '../light/glassEyes'
+import { drawBlink, drawLashes, eyeGlass, paintEye, unitArea, type EyeDesign, type GlassEye } from '../light/glassEyes'
 import { useBounds, useFeed, useNow } from '../hooks'
 import { yd } from '../api'
-import { addMonths, daysIn, monthNum, monthRows, plain, sumMonth, ymOf, yen } from '../money'
+import { monthNum, monthRows, plain, sumMonth, ymOf, yen } from '../money'
 
 const get = () => yd.getMoney()
 const on = yd.onMoney
@@ -97,7 +97,7 @@ function Part({ c, x = 0, y = 0 }: { c: HTMLCanvasElement | null; x?: number; y?
 }
 
 /** One eye and all that moves in it. `wave` makes it blink with the others. */
-function Eye({ eye, spot, label, sub, wave }: { eye: GlassEye; spot: Spot; label: string; sub: string; wave: number }) {
+function Eye({ eye, spot, label, sub, wave, tag }: { eye: GlassEye; spot: Spot; label: string; sub: string; wave: number; tag: string }) {
   const box = useRef<HTMLDivElement>(null)
   const gaze = useRef<HTMLDivElement>(null)
   const size = eye.half * 2, sz = (c: HTMLCanvasElement) => c.width / eye.k
@@ -202,16 +202,29 @@ function Eye({ eye, spot, label, sub, wave }: { eye: GlassEye; spot: Spot; label
         <Part c={eye.top} />
       </div>
       <div className="me-hit" style={{ width: eye.w * 0.8, height: eye.h * 0.9, marginLeft: -eye.w * 0.4, marginTop: -eye.h * 0.45 }}>
-        <span className="me-tag" style={{ top: eye.h * 0.9 + 4 }}><Glow>{label}</Glow> {sub}</span>
+        <span className={`me-tag ${tag}`} style={tag.includes('up') ? undefined : { top: eye.h * 0.9 + 4 }}><Glow>{label}</Glow> {sub}</span>
       </div>
     </div>
   )
 }
 
+/** The month's money as one strip of the eyes' glass, each pane as long as its share. */
+function GlassStrip({ groups }: { groups: { label: string; total: number }[] }) {
+  return (
+    <div className="mw-strip">
+      {[...groups].sort((a, b) => b.total - a.total).map((g) => {
+        const [deep, lit] = eyeGlass(g.label)
+        return <i key={g.label} style={{ flexGrow: Math.max(0, g.total), background: `linear-gradient(112deg, ${deep} -10%, ${lit} 46%, color-mix(in srgb, ${lit} 72%, #fff 20%) 60%, ${lit} 72%, ${deep} 118%)` }} />
+      })}
+    </div>
+  )
+}
+
 /**
- * The household accounts on the desktop (2026-10-30, owner): this month's spending in light, and the
- * money as a swarm of stained-glass eyes floating around it. The area of an eye is what went on that
- * category; its iris is cut into one facet per purchase. A click opens the card with the details.
+ * The household accounts on the desktop (2026-10-30, owner): this month's spending in light with one
+ * spaced line under it, as the clock has its date, and the money as a swarm of stained-glass eyes
+ * floating around it. The area of an eye is what went on that category; its iris is cut into one facet
+ * per purchase. A click on the words or an eye opens the card with the details.
  */
 export function Money() {
   const data = useFeed(get, on)
@@ -220,7 +233,7 @@ export function Money() {
   useEffect(() => yd.onMoneyCardState(setOpen), [])
   const field = useRef<HTMLDivElement>(null)
   const top = useRef<HTMLDivElement>(null)
-  const [eyes, setEyes] = useState<{ eye: GlassEye; spot: Spot; label: string; sub: string; key: string }[]>([])
+  const [eyes, setEyes] = useState<{ eye: GlassEye; spot: Spot; label: string; sub: string; key: string; tag: string }[]>([])
   const [wave, setWave] = useState(0)
   const bounds = useBounds()
   useEffect(() => { if (bounds) screenOrigin = { x: bounds.x, y: bounds.y } }, [bounds])
@@ -230,12 +243,6 @@ export function Money() {
   const today = now.getDate()
   const rows = useMemo(() => monthRows(data, month), [data, month])
   const sums = useMemo(() => sumMonth(month, rows), [month, rows])
-  // last month up to the same day (or its last day, when it is shorter)
-  const before = useMemo(() => {
-    const prev = addMonths(month, -1)
-    if (!data?.months.some((m) => m.month === prev)) return null
-    return sumMonth(prev, monthRows(data, prev), Math.min(today, daysIn(prev)))
-  }, [data, month, today])
 
   const groups = useMemo(() => {
     const own = sums.cats.slice(0, 4).map((c) => ({ label: c.name, items: [c] }))
@@ -268,7 +275,9 @@ export function Money() {
         await new Promise((r) => setTimeout(r, 0))
         if (cancelled) return
         const g = groups[i], eye = paintEye({ design: designs[i], width: widths[i], items: g.items, rows, days: sums.days, today, seed: 11 + i * 13 }, k)
-        out.push({ eye, spot: spots[i], label: g.label, sub: yen(g.items.reduce((a, c) => a + c.total, 0)), key: g.label })
+        // the tag goes under the eye, or over it when the window ends first, and keeps inside the window at the sides
+        const s = spots[i], tag = `${s.y + eye.h * 0.45 + 28 > base.height ? 'up' : ''} ${s.x < 72 ? 'l' : s.x > base.width - 72 ? 'r' : ''}`
+        out.push({ eye, spot: s, label: g.label, sub: yen(g.items.reduce((a, c) => a + c.total, 0)), key: g.label, tag })
       }
       if (!cancelled) setEyes(out)
     })()
@@ -285,32 +294,21 @@ export function Money() {
 
   return (
     <Glass id="money" className={`v2-money ${open ? 'on' : ''}`}>
-      <div className="mw" role="button" tabIndex={-1} aria-label="家計簿を開く" onClick={() => yd.moneyCardOpen()}>
+      <div className="mw" role="button" tabIndex={-1} aria-label="家計簿を開く" onClick={(e) => { if ((e.target as Element).closest('.mw-top, .me-hit')) yd.moneyCardOpen() }}>
         <div ref={field} className="me-field">
-          {eyes.map((e) => <Eye key={e.key} eye={e.eye} spot={e.spot} label={e.label} sub={e.sub} wave={wave} />)}
+          {eyes.map((e) => <Eye key={e.key} eye={e.eye} spot={e.spot} label={e.label} sub={e.sub} wave={wave} tag={e.tag} />)}
         </div>
         <div ref={top} className="mw-top">
-          <div className="mw-head">
-            <Glow className="mw-month">{monthNum(month)}月</Glow>
-            {before && <span className="mw-pace">先月の今日まで {yen(before.net)}</span>}
-          </div>
           {data?.error
             ? <div className="v2-note">{data.error}</div>
             : (
               <div className="mw-total">
-                <LightAmount n={sums.net} size={40} />
+                <LightAmount n={sums.net} size={42} />
                 <Glow className="yen">円</Glow>
               </div>
             )}
-          <div className="mw-list">
-            {sums.cats.slice(0, 3).map((c) => (
-              <div key={c.name} className="mw-line">
-                <i style={{ background: eyeColour(c.name), boxShadow: `0 0 5px ${eyeColour(c.name)}` }} />
-                <span>{c.name}</span>
-                <em>{plain(c.total)}</em>
-              </div>
-            ))}
-          </div>
+          {sums.net > 0 && <GlassStrip groups={groups.map((g) => ({ label: g.label, total: g.items.reduce((a, c) => a + c.total, 0) }))} />}
+          <Glow className="mw-label">{monthNum(month)}月の支出</Glow>
         </div>
       </div>
     </Glass>

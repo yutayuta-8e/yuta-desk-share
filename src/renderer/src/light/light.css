@@ -483,20 +483,16 @@ canvas.refract { position: absolute; inset: 0; width: 100%; height: 100%; z-inde
 /* ---------- the household accounts (2026-10-29): this month's spending in light, a point of light per day,
    one line of light split by what the money went on; the card beside it with the rows, the categories,
    the months, and the form ---------- */
-/* the words are one block with one left edge and one right edge (that of the sum); the eyes float in the whole window around it */
+/* the words stay in the corner, as the clock has its date: the sum, one strip of the eyes' glass, one spaced line. The eyes float around them */
 .v2-money .content { padding: 12px 14px 10px; font-feature-settings: 'palt'; }
-.v2-money .mw { position: relative; display: block; height: 100%; cursor: pointer; outline: none; }
-.v2-money .mw-top { position: relative; z-index: 2; display: inline-flex; flex-direction: column; pointer-events: none; }
-.v2-money .mw-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
-.v2-money .mw-month { font-size: 16px; }
-.v2-money .mw-pace { font-size: 12px; color: color-mix(in srgb, var(--ink) 78%, transparent); text-shadow: 0 0 4px var(--halo-soft); white-space: nowrap; }
+.v2-money .mw { position: relative; display: block; height: 100%; cursor: default; outline: none; }
+.v2-money .mw-top { position: relative; z-index: 2; display: inline-flex; flex-direction: column; cursor: pointer; }
 .v2-money .mw-total { display: flex; align-items: flex-end; gap: 5px; }
-.v2-money .mw-total .yen { font-size: 15px; line-height: 1; margin-bottom: -2px; }
-.v2-money .mw-list { margin-top: 7px; font-size: 12px; }
-.v2-money .mw-line { display: flex; align-items: center; gap: 8px; height: 22px; text-shadow: 0 0 4px var(--halo-soft); }
-.v2-money .mw-line span { color: color-mix(in srgb, var(--ink) 78%, transparent); }
-.v2-money .mw-line i { flex: none; width: 6px; height: 6px; transform: rotate(45deg); }
-.v2-money .mw-line em { margin-left: auto; font-size: 16px; font-style: normal; }
+.v2-money .mw-total .yen { font-size: 14px; line-height: 1; margin-bottom: -2px; }
+.v2-money .mw-strip { display: flex; height: 3px; margin-top: 12px; box-shadow: 0 0 0 1px rgba(6, 4, 8, 0.95), 0 0 0 2px rgba(240, 232, 226, 0.34), 0 0 12px rgba(168, 28, 56, 0.28); }
+.v2-money .mw-strip i { display: block; flex: 1 0 2px; }
+.v2-money .mw-strip i + i { border-left: 1px solid rgba(6, 4, 8, 0.95); }
+.v2-money .mw-label { margin-top: 11px; font-size: 16px; letter-spacing: 0.3em; white-space: nowrap; }
 /* a sum in light: the groups of three digits, and a short slanted stroke for the comma, dipping under the line */
 .lt-amount { display: inline-flex; align-items: flex-end; }
 .lt-amount .grp { display: inline-flex; align-items: flex-end; }
@@ -510,39 +506,43 @@ canvas.refract { position: absolute; inset: 0; width: 100%; height: 100%; z-inde
 .v2-money .me-clip { position: absolute; left: 0; top: 0; }
 .v2-money .me-gaze { position: absolute; width: 0; height: 0; }
 .v2-money .me-shine { position: absolute; display: block; border-radius: 50%; background: rgba(244, 236, 214, 0.82); }
-.v2-money .me-hit { position: absolute; border-radius: 50%; }
-.v2-money .me-tag { position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; white-space: nowrap; font-size: 12px; opacity: 0; transition: opacity 160ms ease; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.7); }
+.v2-money .me-hit { position: absolute; border-radius: 50%; cursor: pointer; }
+.v2-money .me-tag { position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; white-space: nowrap; font-size: 15px; opacity: 0; transition: opacity 160ms ease; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.7); }
+.v2-money .me-tag.up { bottom: calc(100% + 4px); }
+.v2-money .me-tag.l { left: 0; transform: none; }
+.v2-money .me-tag.r { left: auto; right: 0; transform: none; }
 .v2-money .me-hit:hover .me-tag { opacity: 1; }
 
 .moneycard { width: 100vw; }
-/* three sizes of words only: 17 the month, 14 what is read, 12 what is beside it. Everything starts on one left edge */
+/* the sizes of the other widgets: 15 what is read, 13 what is beside it. Everything starts on one left edge */
 .mcard { width: 100vw; gap: 12px; font-feature-settings: 'palt'; }
 .mcard .count, .mcard .m-side, .mcard .dh, .mcard .mnote, .mcard .mmeta, .mcard .m-legend, .mcard .m-filter, .mcard .m-conv, .mcard .m-dup,
 .mcard .m-net .yen, .mcard .mr .mn, .mcard .mr .ma, .mcard .mcat { text-shadow: 0 0 4px var(--halo-soft); }
 .mcard .chips { gap: 6px 18px; }
-.mcard .chip { font-size: 14px; padding: 3px 0 6px; }
-.mcard button { font-size: 14px; }
-.mcard label, .mcard .lab { font-size: 12px; }
-.mcard .check { font-size: 14px; }
+.mcard .chip { font-size: 15px; padding: 3px 0 6px; }
+.mcard button { font-size: 15px; }
+.mcard label, .mcard .lab { font-size: 13px; }
+.mcard .check { font-size: 15px; }
 .mcard input[type=text], .mcard input[type=date] { font-size: 15px; padding: 4px 0 5px; }
 .mcard .m-top { display: flex; align-items: baseline; gap: 6px; }
-.mcard .m-top h1 small { font-size: 12px; color: var(--ink-dim); }
+.mcard .m-top h1 { font-size: 16px; letter-spacing: 0.3em; }
+.mcard .m-top h1 small { font-size: 13px; letter-spacing: 0; color: var(--ink-dim); }
 .mcard .m-nav { display: flex; }
 .mcard .m-nav button { font-size: 18px; line-height: 1; padding: 0 7px 2px; }
-.mcard .count { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
-.mcard .m-sum { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: -8px; }
+.mcard .count { margin-left: auto; font-size: 13px; color: var(--ink-dim); }
+.mcard .m-sum { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; margin-top: -4px; }
 .mcard .m-net { display: flex; align-items: flex-end; gap: 4px; }
-.mcard .m-net .yen { font-size: 14px; line-height: 1; margin-bottom: -1px; }
-.mcard .m-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--ink-dim); white-space: nowrap; padding-bottom: 3px; }
+.mcard .m-net .yen { font-size: 13px; line-height: 1; margin-bottom: -1px; }
+.mcard .m-side { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--ink-dim); white-space: nowrap; }
 .mcard .m-tabs { margin-top: 2px; }
 .mcard .m-list { max-height: 318px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px; margin-bottom: -10px;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
-.mcard .m-day .dh { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-dim); padding-bottom: 3px; margin-bottom: 4px;
+.mcard .m-day .dh { display: flex; justify-content: space-between; font-size: 13px; letter-spacing: 0.14em; color: var(--ink-dim); padding-bottom: 3px; margin-bottom: 4px;
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
 /* the category beside the name; a long name gives way before the category does */
-.mcard .mr { position: relative; display: grid; grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) 4.6em; column-gap: 12px; align-items: baseline; padding: 3px 0; cursor: pointer; font-size: 14px; }
+.mcard .mr { position: relative; display: grid; grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) 4.6em; column-gap: 12px; align-items: baseline; padding: 4px 0; cursor: pointer; font-size: 15px; }
 .mcard .mr .mn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mcard .mr .mc { padding-left: 2px; font-size: 12px; color: var(--ink-dim); }
+.mcard .mr .mc { padding-left: 2px; font-size: 13px; color: var(--ink-dim); }
 .mcard .mr .ma { text-align: right; white-space: nowrap; }
 .mcard .mr.refund .ma, .mcard .mr.income .ma { color: var(--holi); text-shadow: 0 0 6px var(--holi-glow); }
 .mcard .mr:hover .mn, .mcard .mr.on .mn { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo); }
@@ -551,28 +551,28 @@ canvas.refract { position: absolute; inset: 0; width: 100%; height: 100%; z-inde
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--halo) 34%, transparent) 30%, color-mix(in srgb, var(--halo) 34%, transparent) 70%, transparent);
   animation: m-flash 2.6s ease-out forwards; }
 @keyframes m-flash { 0%, 35% { opacity: 1; } 100% { opacity: 0; } }
-.mcard .mdet { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 8px; font-size: 12px; }
+.mcard .mdet { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 8px; font-size: 13px; }
 .mcard .mnote { color: var(--ink-dim); overflow-wrap: anywhere; }
 .mcard .mmeta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-dim); }
 .mcard .acts { display: flex; justify-content: flex-end; gap: 10px; }
 .mcard .acts button { padding: 3px 12px 5px; }
 /* looking through every month: a line to write in, quieter than the form's fields */
-.mcard input.m-search { font-size: 14px; padding: 2px 0 5px; margin-top: -2px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); }
+.mcard input.m-search { font-size: 15px; padding: 2px 0 5px; margin-top: -2px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); }
 .mcard input.m-search::placeholder { color: var(--ink-dim); opacity: 0.8; }
 /* the day pressed in the widget's sky: its heading lit */
 .mcard .m-day.goto .dh { color: var(--ink); border-bottom-color: color-mix(in srgb, var(--ink) 60%, transparent); text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
 .mcard .m-recat { gap: 2px 12px; margin-top: 2px; }
-.mcard .m-recat .chip { font-size: 12px; padding: 2px 0 4px; }
-.mcard .m-filter { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; margin: -4px 0 -6px; }
-.mcard .m-filter button { font-size: 12px; }
+.mcard .m-recat .chip { font-size: 13px; padding: 2px 0 4px; }
+.mcard .m-filter { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; margin: -4px 0 -6px; }
+.mcard .m-filter button { font-size: 13px; }
 .mcard .m-cats { display: flex; flex-direction: column; gap: 2px; }
-.mcard .mcat { display: grid; grid-template-columns: 4.6em 1fr 4.6em 2.6em; column-gap: 10px; align-items: center; padding: 4px 0; font-size: 14px; text-align: left; }
+.mcard .mcat { display: grid; grid-template-columns: 4.6em 1fr 4.6em 2.6em; column-gap: 10px; align-items: center; padding: 4px 0; font-size: 15px; text-align: left; }
 .mcard .mcat::after { display: none; }
 .mcard .mcat .cbar { position: relative; height: 2.5px; }
 .mcard .mcat .cbar i { position: absolute; left: 0; top: 0; height: 2.5px; border-radius: 2px; background: var(--ink); box-shadow: 0 0 6px var(--halo), 0 0 2px var(--halo); }
 .mcard .mcat:hover .cn { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo); }
 .mcard .mcat .ca { text-align: right; white-space: nowrap; }
-.mcard .mcat .cp { text-align: right; font-size: 12px; color: var(--ink-dim); }
+.mcard .mcat .cp { text-align: right; font-size: 13px; color: var(--ink-dim); }
 .mcard .mcat.income .ca { color: var(--holi); text-shadow: 0 0 6px var(--holi-glow); }
 .mcard .m-months .bars { position: relative; display: flex; align-items: stretch; gap: 2px; }
 .mcard .m-months .mbar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; outline: none; }
@@ -583,18 +583,18 @@ canvas.refract { position: absolute; inset: 0; width: 100%; height: 100%; z-inde
 /* this month is still growing: its line fades out at the top */
 .mcard .m-months .mbar.begun .col i { opacity: 0.45; }
 .mcard .m-months .mbar.now .col i { -webkit-mask-image: linear-gradient(to top, #000 70%, transparent); }
-.mcard .m-months .mbar small { height: 14px; font-size: 12px; line-height: 14px; color: var(--ink-dim); }
+.mcard .m-months .mbar small { height: 14px; font-size: 13px; line-height: 14px; color: var(--ink-dim); }
 .mcard .m-months .mbar.on small { color: var(--ink); }
 .mcard .m-months .avg { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--ink) 38%, transparent); pointer-events: none; }
-.mcard .m-legend { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 12px; }
+.mcard .m-legend { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13px; }
 .mcard .m-legend .dim { color: var(--ink-dim); }
-.mcard .add { align-self: flex-start; font-size: 14px; color: var(--ink-dim); padding: 2px 0 4px; }
+.mcard .add { align-self: flex-start; font-size: 15px; color: var(--ink-dim); padding: 2px 0 4px; }
 .mcard .add::after { display: none; }
 .mcard .add:hover { color: var(--ink); }
 .mcard .two { display: flex; gap: 12px; align-items: flex-end; }
 .mcard .two label { flex: 1; min-width: 0; }
 .mcard .two .chips.unit { flex: none; padding-bottom: 4px; }
 .mcard .two .check { flex: none; padding-bottom: 7px; }
-.mcard .m-conv { margin-top: -6px; font-size: 12px; color: var(--ink-dim); }
-.mcard .m-dup { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--ink); }
+.mcard .m-conv { margin-top: -6px; font-size: 13px; color: var(--ink-dim); }
+.mcard .m-dup { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink); }
 .mcard .m-dup button { align-self: flex-end; padding: 3px 12px 5px; }

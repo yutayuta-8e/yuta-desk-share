@@ -45,6 +45,8 @@ const HUE: Record<string, string> = { 食費: 'ruby', 娯楽: 'amethyst', サブ
 const hueOf = (name: string) => GLASS[HUE[name] ?? 'pale']
 /** The category's lit colour, for the small marks beside its name. */
 export const eyeColour = (name: string) => css(hueOf(name)[1])
+/** The category's glass, deep and lit, for what is made of the same glass as its eye. */
+export const eyeGlass = (name: string): [string, string] => [css(hueOf(name)[0]), css(hueOf(name)[1])]
 
 /* ---------- glass grain: tiles of grey, where 0.5 changes nothing under 'overlay' ---------- */
 function latticeNoise(n: number, fx: number, fy: number, seed: number): Float32Array {

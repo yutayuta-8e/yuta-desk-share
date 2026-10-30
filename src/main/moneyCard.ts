@@ -18,7 +18,7 @@ function widgetBounds(): Bounds {
   const w = getWindow('money')
   if (w && !w.isDestroyed()) return boundsOf(w)
   const a = screen.getPrimaryDisplay().workArea
-  return { x: a.x + 40, y: a.y + 22, width: 440, height: 236 }
+  return { x: a.x + 23, y: a.y + 19, width: 470, height: 430 }
 }
 
 /** The widget shows its lines brighter while its card is open. */
