@@ -9,7 +9,10 @@ export const DIGITS: Record<string, Glyph> = {
   // a true ellipse (94x98), the same curve as the loops of 6, 8 and 9
   '0': { d: 'M65,16 C91,16 112,37.9 112,65 C112,92.1 91,114 65,114 C39,114 18,92.1 18,65 C18,37.9 39,16 65,16 Z', advance: 130 },
   '1': { d: 'M28,50 C44,44 58,32 66,18 C68,48 68,82 68,114', advance: 92 },
-  '2': { d: 'M20,42 C22,10 110,10 110,44 C110,70 46,80 24,104 C18,112 26,114 44,114 C66,114 90,114 112,114', advance: 130 },
+  // 5% smaller around its own centre, same stroke weight; it read larger than the other digits. Its
+  // centre (64.6) stays with theirs (64-66), a little high: standing on the baseline it sank between
+  // its neighbours, and centred it still read a touch low (本人の指示 2026-10-31)
+  '2': { d: 'M22.3,41.7 C24.2,11.3 107.8,11.3 107.8,43.61 C107.8,68.31 47,77.81 26.1,100.6 C20.4,108.2 28,110.1 45.1,110.1 C66,110.1 88.8,110.1 109.7,110.1', advance: 130 },
   '3': { d: 'M24,30 C40,12 106,8 108,38 C110,58 82,64 66,64 C84,64 114,72 112,96 C110,122 40,124 20,100', advance: 130 },
   '4': { d: 'M88,114 C88,82 88,48 88,18 C66,44 44,66 22,84 C44,90 78,90 112,88', advance: 130 },
   '5': { d: 'M102,18 C78,16 56,16 36,18 C32,34 30,50 28,66 C56,52 112,56 112,86 C112,120 44,124 22,100', advance: 130 },

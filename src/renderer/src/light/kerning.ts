@@ -31,8 +31,10 @@ const LEFT_ROUND = '0689' // glyphs whose left side is a bowl
 // colon pairs was looked at large, and these are the ones that read wrong. Mostly a top-right end
 // (5's bar, 6's hook, the loop of 9) running into a top-left start (1's flag, 7's bar, 9's loop).
 // Approved by the owner on a before/after sheet (2026-10-28); the other pairs stay as computed.
+// The pairs of 2 were looked at again when the 2 became smaller (2026-10-31): its top is now lower, so
+// what stands high to its right (7's bar, 3's top) would slide over it.
 const PAIR_TUNE: Record<string, number> = {
-  '51': 8, '61': 6, '69': 6, '97': 5, '24': 5, '59': 4, '87': 3,
+  '51': 8, '61': 6, '69': 6, '97': 5, '27': 10, '23': 8, '24': 3, '59': 4, '87': 3,
   '81': 2, '91': 2, '37': 2, '57': 2, '40': -3,
   '7:': -6, ':1': -4, ':4': -3
 }
