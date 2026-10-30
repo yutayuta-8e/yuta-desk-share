@@ -5,6 +5,7 @@ import { useLightTheme } from '../light/Light'
 import type { EventDetail, EventDraft } from '@shared/types'
 import { ymd, md, hm, spanOf, dayLabel } from './calendarDays'
 import { SubsCard } from './SubsCard'
+import { Refraction } from '../light/Refraction'
 
 const params = new URLSearchParams(location.search)
 const getCal = () => yd.getCalendar()
@@ -74,6 +75,7 @@ function EventCard() {
   return (
     <div className={`calcard ${view}`}>
       <div ref={ref} className="gcard">
+        <Refraction />
         {view === 'form'
           ? <EventForm edit={detail} />
           : detail ? <Detail d={detail} onEdit={() => setView('form')} />
@@ -162,6 +164,14 @@ function EventForm({ edit }: { edit: EventDetail | null }) {
     const e = new Date(`${v}T00:00:00`); e.setDate(e.getDate() + Math.max(0, Math.round(len)))
     setStartDate(v); setEndDate(ymd(e))
   }
+  // one day with a time by default; ticking 終日 opens the second date (both start on the chosen day)
+  // so the event can run over several days, and unticking it brings back the single day (owner, 2026-10-29)
+  const onAllDay = (on: boolean) => {
+    setAllDay(on)
+    if (!on) setEndDate(startDate)
+  }
+  // an event already over several days keeps both dates even with times
+  const twoDays = allDay || endDate !== startDate
   const onStartTime = (v: string) => {
     if (!v) return
     setEndTime(toTime(toMin(v) + Math.max(15, toMin(endTime) - toMin(startTime))))
@@ -183,14 +193,16 @@ function EventForm({ edit }: { edit: EventDetail | null }) {
       <label>予定の名前<input ref={input} type="text" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /></label>
       <div className="two">
         <label>日付<input type="date" value={startDate} onChange={(e) => onStartDate(e.target.value)} /></label>
-        <span className="sep">〜</span>
-        <label>終わり<input type="date" value={endDate} min={startDate} onChange={(e) => e.target.value && setEndDate(e.target.value)} /></label>
+        {twoDays && <>
+          <span className="sep">〜</span>
+          <label>終わり<input type="date" value={endDate} min={startDate} onChange={(e) => e.target.value && setEndDate(e.target.value)} /></label>
+        </>}
       </div>
       <div className="two">
         <label>時間<input type="time" value={startTime} disabled={allDay} onChange={(e) => onStartTime(e.target.value)} /></label>
         <span className="sep">〜</span>
         <label aria-label="終わりの時間"><input type="time" value={endTime} disabled={allDay} onChange={(e) => e.target.value && setEndTime(e.target.value)} /></label>
-        <label className="check"><input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />終日</label>
+        <label className="check"><input type="checkbox" checked={allDay} onChange={(e) => onAllDay(e.target.checked)} />終日</label>
       </div>
       <div className={`acc rule ${more ? 'open' : ''}`}>
         <button type="button" className="acc-head" aria-expanded={more} onClick={() => setMore(!more)}>
@@ -222,7 +234,6 @@ function EventForm({ edit }: { edit: EventDetail | null }) {
           </div>
         )}
       </div>
-      <div className="note">{edit ? `${edit.calendarName} の予定` : 'Google カレンダーに入ります'}</div>
       {err && <div className="err" role="alert">{err}</div>}
       <div className="buttons">
         <button type="button" onClick={() => yd.calCardClose()}>やめる</button>

@@ -4,6 +4,8 @@ import { useBounds, useConfig, useTheme, useWallpaper } from './hooks'
 import type { Bounds, WallpaperInfo, WidgetId } from '@shared/types'
 import { TEST_BG, TestUnderlay } from './light/testBg'
 import { useEditMode } from './light/editMode'
+import { Refraction } from './light/Refraction'
+import { GLASS_WIDGETS } from '@shared/types'
 
 /** Wallpaper "Fill" geometry for this window: where the (cover-scaled) image sits relative to the window. */
 export function wallpaperPlacement(wp: WallpaperInfo, bounds: Bounds, zoom: number) {
@@ -62,6 +64,8 @@ export function Glass({ id, className, children, glassText = false }: { id: Widg
   const wcfg = cfg?.widgets[id]
   const zoom = wcfg?.scale ?? 1
   const card = wcfg?.card ?? true
+  // a slab of glass under the widget: off since 2026-10-30 (owner), still a choice in the widget's menu
+  const slab = GLASS_WIDGETS.includes(id) && (wcfg?.glass ?? false)
   const blur = wcfg?.blur ?? 24
   const textBg = useGlassTextBackdrop(glassText && !!wcfg, wp, bounds, Math.max(8, blur), zoom)
 
@@ -117,10 +121,11 @@ export function Glass({ id, className, children, glassText = false }: { id: Widg
   const onContextMenu = useCallback((e: MouseEvent) => { e.preventDefault(); yd.contextMenu(id) }, [id])
 
   return (
-    <div ref={ref} className={`glass ${card ? '' : 'nocard'} ${dragging ? 'dragging' : ''} ${editing ? 'editing' : ''} ${className ?? ''}`} style={style}
+    <div ref={ref} className={`glass ${card ? '' : 'nocard'} ${slab ? 'slab' : ''} ${dragging ? 'dragging' : ''} ${editing ? 'editing' : ''} ${className ?? ''}`} style={style}
       onContextMenu={onContextMenu}
       onMouseDownCapture={editing ? onEditDown : undefined} onClickCapture={editing ? onEditClick : undefined}>
       {TEST_BG && <TestUnderlay wp={wp} bounds={bounds} zoom={zoom} />}
+      {slab && <Refraction />}
       {card && <div className="backdrop">{img && <img src={img.src} style={img.style} draggable={false} alt="" />}</div>}
       {card && <div className="tint" />}
       <div className="content">{children}</div>

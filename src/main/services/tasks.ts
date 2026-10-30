@@ -98,22 +98,29 @@ function yutaExe(): string {
   return existsSync(local) ? local : 'yuta'
 }
 
-type YutaResult = { ok: boolean; message: string; result?: Record<string, unknown> }
+export type YutaResult = { ok: boolean; message: string; result?: Record<string, unknown>; code?: string; detail?: Record<string, unknown> }
 
-/** Runs `yuta task …` as the owner (--by user). No shell: titles hold spaces and Japanese, so each
- *  argument is passed as one argv entry. YD_TASK_DRYRUN=1 adds --dry-run (checks only). */
-function runYuta(args: string[]): Promise<YutaResult> {
+/** Runs `yuta <group> …` as the owner (--by user). No shell: titles hold spaces and Japanese, so each
+ *  argument is passed as one argv entry. dry adds --dry-run (checks only). code: yuta's error_code
+ *  (duplicate, ambiguous…), detail its error_detail. */
+export function runYutaGroup(group: 'task' | 'money', args: string[], dry: boolean): Promise<YutaResult> {
   return new Promise((resolve) => {
-    const full = ['task', ...args, '--json', '--by', 'user', ...(process.env.YD_TASK_DRYRUN ? ['--dry-run'] : [])]
+    // the shared options go right after the action, before any `--` that ends the options
+    const full = [group, args[0], '--json', '--by', 'user', ...(dry ? ['--dry-run'] : []), ...args.slice(1)]
     execFile(yutaExe(), full, { windowsHide: true, timeout: 30000 }, (err, out, errOut) => {
-      let parsed: { ok?: boolean; error?: string; result?: Record<string, unknown> } | null = null
+      let parsed: { ok?: boolean; error?: string; error_code?: string; error_detail?: Record<string, unknown>; result?: Record<string, unknown> } | null = null
       try { parsed = JSON.parse(String(out)) } catch { /* not JSON */ }
       if (err || (parsed && parsed.ok === false)) {
-        return resolve({ ok: false, message: (parsed?.error || String(errOut) || String(out) || String(err)).trim().slice(0, 300) })
+        return resolve({ ok: false, message: (parsed?.error || String(errOut) || String(out) || String(err)).trim().slice(0, 300), code: parsed?.error_code, detail: parsed?.error_detail })
       }
       resolve({ ok: true, message: String(out).trim().slice(0, 300), result: parsed?.result })
     })
   })
+}
+
+/** YD_TASK_DRYRUN=1 adds --dry-run. */
+function runYuta(args: string[]): Promise<YutaResult> {
+  return runYutaGroup('task', args, !!process.env.YD_TASK_DRYRUN)
 }
 
 export function markTaskDone(title: string): Promise<YutaResult> {

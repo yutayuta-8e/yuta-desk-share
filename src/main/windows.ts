@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { attachToDesktop, raiseOnDesktop, getRectDip, setRectDip, movePhysical, type LayerMode } from './desktopLayer'
 import { getConfig, updateConfig, configPath } from './config'
 import { getThemeInfo, notifyThemeChanged } from './theme'
-import { WIDGET_IDS, WIDGET_LABELS, type WidgetId, type Bounds } from '../shared/types'
+import { WIDGET_IDS, WIDGET_LABELS, GLASS_WIDGETS, type WidgetId, type Bounds } from '../shared/types'
 
 const windows = new Map<WidgetId, BrowserWindow>()
 export let layerMode: LayerMode = 'none'
@@ -243,6 +243,7 @@ function showContextMenu(id: WidgetId, extra: MenuItemConstructorOptions[] = [])
     { type: 'separator' },
     ...extra,
     { label: 'カードを表示', type: 'checkbox', checked: getConfig().widgets[id].card, click: () => { updateConfig((c) => { c.widgets[id].card = !c.widgets[id].card }); broadcast('config', getConfig()) } },
+    ...(GLASS_WIDGETS.includes(id) ? [{ label: 'ガラスの板', type: 'checkbox' as const, checked: getConfig().widgets[id].glass ?? false, click: () => { updateConfig((c) => { c.widgets[id].glass = !(c.widgets[id].glass ?? false) }); broadcast('config', getConfig()) } }] : []),
     { label: 'サイズ（Ctrl+ホイールでも変更可）', submenu: scaleItems(id) },
     { label: 'ガラスの濃さ', submenu: sliderItems(id, 'opacity', [0, 0.08, 0.14, 0.22, 0.30, 0.40], (v) => `${Math.round(v * 100)}%`) },
     { label: 'ぼかし', submenu: sliderItems(id, 'blur', [0, 16, 28, 44, 60], (v) => `${v}px`) },

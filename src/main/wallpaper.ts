@@ -142,7 +142,7 @@ export function getWallpaperInfo(): WallpaperInfo {
 }
 
 export async function startWallpaperService(): Promise<void> {
-  protocol.handle('yd', (req) => {
+  protocol.handle('yd', async (req) => {
     const u = new URL(req.url)
     if (u.host === 'mock') {
       const f = join(app.getAppPath(), 'docs', 'mockups', decodeURIComponent(u.pathname.slice(1)))
@@ -154,7 +154,11 @@ export async function startWallpaperService(): Promise<void> {
       return net.fetch(pathToFileURL(testBg).toString(), { headers: { 'cache-control': 'no-store' } })
     }
     if (u.host === 'wallpaper' && snapshotPath) {
-      return net.fetch(pathToFileURL(snapshotPath).toString(), { headers: { 'cache-control': 'no-store' } })
+      // readable by the pages: the cards' glass bends its pixels (light/Refraction.tsx)
+      const r = await net.fetch(pathToFileURL(snapshotPath).toString(), { headers: { 'cache-control': 'no-store' } })
+      const headers = new Headers(r.headers)
+      headers.set('access-control-allow-origin', '*')
+      return new Response(r.body, { status: r.status, headers })
     }
     return new Response('not found', { status: 404 })
   })

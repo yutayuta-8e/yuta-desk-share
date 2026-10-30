@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { yd } from '../api'
+import { Refraction } from '../light/Refraction'
 
 const WAIT = '返事待ち: '
 const params = new URLSearchParams(location.search)
@@ -40,6 +41,7 @@ export function TaskForm() {
 
   return (
     <form className="taskform gcard" onSubmit={save}>
+      <Refraction />
       <h1>{mode === 'edit' ? 'タスクを編集' : 'タスクを追加'}</h1>
       <label>タスク名<input ref={input} id="task-name" type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></label>
       <div className="row">

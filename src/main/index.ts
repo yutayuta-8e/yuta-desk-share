@@ -1,5 +1,5 @@
 import { bootLog } from './boot'
-import { app, ipcMain, Menu, powerMonitor, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, powerMonitor, screen, type MenuItemConstructorOptions } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { GLYPHS, GLYPH_NUMBERS } from '../shared/glyphs'
@@ -8,6 +8,8 @@ import { GLYPHS, GLYPH_NUMBERS } from '../shared/glyphs'
 const PET_LOOKS = ['いまの子', 'しずく', 'ねこみみ', 'ひとだま', 'シーツ', 'ちょうちん']
 /** Same order as PET_FACES in renderer/src/light/petDraw.ts. */
 const PET_FACE_LABELS = ['いまの顔（たて線の目）', 'まんまる目＋ちいさな口', 'にこにこ目＋あいた口', 'てん目＋ω口', 'きらきら目＋おちょぼ口', 'たれ目＋にょろ口']
+/** The sheet's blush (petDraw.ts cheeks). */
+const PET_CHEEKS = [['lines', '3本線'], ['round', 'まる']] as const
 import { loadConfig, getConfig, updateConfig } from './config'
 import { registerWallpaperScheme, startWallpaperService, wallpaperEvents, getWallpaperInfo } from './wallpaper'
 import { startThemeService, themeEvents } from './theme'
@@ -25,7 +27,9 @@ import { getIcon, launch, readLogos } from './services/launcher'
 import { readCalendar, connectGoogle, hasCredentials, isConnected, getEventDetail, saveEvent, deleteEvent } from './services/calendar'
 import { startMarksWatcher, marksEvents, saveSub, deleteSub } from './services/calendarMarks'
 import { openCalCard, closeCalCard, placeCalCard } from './calCard'
-import type { WidgetId, CalCardRequest, CalCardView, EventDraft, SubDraft } from '../shared/types'
+import { readMoney, startMoneyWatcher, moneyEvents, addMoney, fixMoney, removeMoney } from './services/money'
+import { openMoneyCard, closeMoneyCard, placeMoneyCard, toggleMoneyCard } from './moneyCard'
+import type { WidgetId, CalCardRequest, CalCardView, EventDraft, SubDraft, MoneyDraft, MoneyRef } from '../shared/types'
 import { desktopReady } from './desktopLayer'
 import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -66,6 +70,10 @@ function calendarRange(): [Date, Date] {
 
 async function pushBattery(): Promise<void> { broadcast('battery', await readBattery()) }
 async function pushUsage(): Promise<void> { broadcast('usage', await readUsage()) }
+function pushMoney(m: ReturnType<typeof readMoney>): void {
+  broadcast('money', m)
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w.title === 'yuta-desk 家計簿') w.webContents.send('money', m)
+}
 async function pushCalendar(): Promise<void> { const [s, e] = calendarRange(); broadcast('calendar', await readCalendar(s, e)) }
 
 function startServices(): void {
@@ -76,6 +84,19 @@ function startServices(): void {
   wallpaperEvents.on('changed', (info) => broadcast('wallpaper', info))
   themeEvents.on('changed', (t) => broadcast('theme', t))
   taskEvents.on('changed', (t) => broadcast('tasks', t))
+  startMoneyWatcher()
+  // the widget and the card both follow the month files (the card is not a widget window, so it is told apart)
+  moneyEvents.on('changed', (m) => pushMoney(m))
+  // the eyes of the household accounts turn to the pointer: looked at 4 times a second, told only when it moved
+  let lastPointer = { x: -1, y: -1 }
+  setInterval(() => {
+    const w = getWindow('money')
+    if (!w || w.isDestroyed()) return
+    const p = screen.getCursorScreenPoint()
+    if (Math.abs(p.x - lastPointer.x) + Math.abs(p.y - lastPointer.y) < 4) return
+    lastPointer = p
+    w.webContents.send('cursor', p)
+  }, 250)
   startMediaService()
   mediaEvents.on('changed', (m) => {
     getWindow('media')?.webContents.send('media', m)
@@ -141,6 +162,19 @@ function registerDataIpc(): void {
   // the subscriptions card writes the Vault list (main/services/calendarMarks.ts); the calendar hears it through the watcher's event
   ipcMain.handle('subs-save', (_e, d: SubDraft, original?: string) => saveSub(d, original))
   ipcMain.handle('subs-delete', (_e, name: string) => deleteSub(String(name)))
+  // the household accounts: read here, written through `yuta money` (main/services/money.ts)
+  ipcMain.handle('get-money', () => readMoney())
+  ipcMain.on('money-card-open', (_e, month?: string, day?: number) => { if (typeof month === 'string') openMoneyCard(month, Number(day) || undefined); else toggleMoneyCard() })
+  ipcMain.on('money-card-close', () => closeMoneyCard())
+  ipcMain.on('money-card-place', (_e, h: number, view: string) => placeMoneyCard(Number(h), view === 'form' ? 'form' : 'month'))
+  ipcMain.handle('money-add', async (_e, d: MoneyDraft) => {
+    const r = await addMoney(d)
+    // the pet is glad when the owner writes one down
+    if (r.ok) getWindow('pet')?.webContents.send('pet-event', { type: 'money' })
+    return r
+  })
+  ipcMain.handle('money-fix', (_e, ref: MoneyRef, d: MoneyDraft) => fixMoney(ref, d))
+  ipcMain.handle('money-remove', (_e, ref: MoneyRef) => removeMoney(ref))
   ipcMain.on('pet-move', (_e, x: number, y: number) => {
     const w = getWindow('pet')
     if (w) moveWindow(w, x, y)
@@ -242,11 +276,21 @@ function registerMenus(): void {
       label, type: 'radio' as const, checked: (getConfig().pet.face ?? 5) === i,
       click: () => { const c = updateConfig((cfg) => { cfg.pet.face = i }); broadcast('config', c) }
     })) },
+    { label: 'ほっぺ', submenu: PET_CHEEKS.map(([id, label]) => ({
+      label, type: 'radio' as const, checked: (getConfig().pet.cheek ?? 'lines') === id,
+      click: () => { const c = updateConfig((cfg) => { cfg.pet.cheek = id }); broadcast('config', c) }
+    })) },
+    { label: '吹き出しをガラスに', type: 'checkbox', checked: getConfig().pet.bubbleGlass ?? false,
+      click: () => { const c = updateConfig((cfg) => { cfg.pet.bubbleGlass = !(cfg.pet.bubbleGlass ?? false) }); broadcast('config', c) } },
     { type: 'separator' }
   ])
   registerContextMenuExtras('battery', (): MenuItemConstructorOptions[] => [{ label: '今すぐ更新', click: () => void pushBattery() }])
   registerContextMenuExtras('usage', (): MenuItemConstructorOptions[] => [{ label: '今すぐ更新', click: () => void pushUsage() }])
   registerContextMenuExtras('tasks', (): MenuItemConstructorOptions[] => [{ label: '今すぐ更新', click: () => broadcast('tasks', readTasks()) }])
+  registerContextMenuExtras('money', (): MenuItemConstructorOptions[] => [
+    { label: '明細を開く', click: () => openMoneyCard() },
+    { label: '今すぐ更新', click: () => pushMoney(readMoney()) }
+  ])
 }
 
 app.whenReady().then(async () => {
@@ -266,11 +310,13 @@ app.whenReady().then(async () => {
   logLine('widgets created')
 })
 
-// starting the app again shows the widgets; with --player it opens the full-screen player
-// (a shortcut can point at it; the checks use it too)
+// starting the app again shows the widgets; with --player it opens the full-screen player, with
+// --money the household accounts' card, or closes it when it is open (a shortcut can point at them;
+// the checks use them too)
 app.on('second-instance', (_e, argv) => {
   applyWidgetEnabled()
   if (argv.includes('--player')) openPlayer()
+  if (argv.includes('--money')) toggleMoneyCard(2500)
 })
 app.on('window-all-closed', () => { /* keep running in the tray */ })
 app.on('before-quit', () => {

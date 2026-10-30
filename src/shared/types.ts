@@ -1,6 +1,6 @@
-export type WidgetId = 'clock' | 'calendar' | 'tasks' | 'battery' | 'usage' | 'launcher' | 'pet' | 'media'
+export type WidgetId = 'clock' | 'calendar' | 'tasks' | 'battery' | 'usage' | 'launcher' | 'pet' | 'media' | 'money'
 
-export const WIDGET_IDS: WidgetId[] = ['clock', 'calendar', 'tasks', 'battery', 'usage', 'launcher', 'media', 'pet']
+export const WIDGET_IDS: WidgetId[] = ['clock', 'calendar', 'tasks', 'battery', 'usage', 'launcher', 'media', 'money', 'pet']
 
 export const WIDGET_LABELS: Record<WidgetId, string> = {
   clock: '時計',
@@ -10,7 +10,8 @@ export const WIDGET_LABELS: Record<WidgetId, string> = {
   usage: 'AI usage',
   launcher: 'ランチャー',
   pet: 'ペット',
-  media: '再生中'
+  media: '再生中',
+  money: '家計簿'
 }
 
 export type WidgetConfig = {
@@ -27,7 +28,12 @@ export type WidgetConfig = {
   scale: number
   /** false = no glass card, content floats directly on the wallpaper */
   card: boolean
+  /** a slab of glass bending the wallpaper behind the widget (2026-10-29; off unless chosen since 2026-10-30, never for the clock or the pet) */
+  glass?: boolean
 }
+
+/** The widgets that may stand on a slab of glass (the owner left out the clock; the pet has its own window). */
+export const GLASS_WIDGETS: WidgetId[] = ['calendar', 'tasks', 'battery', 'usage', 'launcher', 'media', 'money']
 
 /**
  * glyph: a mark of light chosen instead of the icon. logo: the id of the app's own logo drawn as lines,
@@ -49,9 +55,12 @@ export type Config = {
   tasks: { vaultTaskFile: string; daysAhead: number; style?: number }
   battery: { refreshSeconds: number }
   usage: { refreshMinutes: number; hidden?: string[] }
-  pet: { phrases: string[]; wakePhrase: string; variant?: number; face?: number }
+  /** cheek: the sheet's blush, three quick strokes (default) or round (2026-10-29) */
+  pet: { phrases: string[]; wakePhrase: string; variant?: number; face?: number; cheek?: 'round' | 'lines'; bubbleGlass?: boolean }
   /** what the media widget's SoundCloud entrance plays (an embeddable SoundCloud address) */
   media?: { soundcloudUrl?: string }
+  /** The owner's ways of paying, written only in the owner's own config.json, never in the code. */
+  money?: { pays?: string[] }
 }
 
 export type ThemeInfo = { dark: boolean; light: boolean; accent: string }
@@ -172,3 +181,27 @@ export type MediaState = { kind: 'idle' } | {
 export type LauncherIcon = { path: string; dataUrl: string | null }
 
 export type PetState = 'idle' | 'walk' | 'sleep' | 'jump' | 'look' | 'stretch' | 'yawn' | 'fly' | 'hover' | 'perch' | 'tease'
+
+/**
+ * The household accounts (2026-10-29): the Vault's month files life/家計簿/YYYY-MM.csv, read as they
+ * are and written only through `yuta money` (so the duplicate checks and the trash apply).
+ * amount: yen, never 0; a refund or a cancellation is negative in the original's category; income is
+ * positive under 収入 and is kept out of the spending. idx: the row's place in its month file.
+ */
+export type MoneyRow = { idx: number; date: string; amount: number; category: string; memo: string; pay: string; by: string }
+export type MoneyMonth = { month: string; rows: MoneyRow[] }
+export type MoneyData = { months: MoneyMonth[]; updatedAt: number; error?: string }
+
+/** The categories and payment methods of the Vault's README, in its order. */
+export const MONEY_CATEGORIES = ['食費', '日用品', '交通', '通信', 'サブスク', '医療', '娯楽', '制作', 'その他', '収入'] as const
+export const MONEY_PAYS = ['現金', 'その他'] as const
+export const INCOME = '収入'
+/** The owner's fixed rate for payments in dollars (2026-10-25); the memo keeps the dollars and the rate. */
+export const USD_JPY = 165
+
+/** What the card sends to write one row. force: write even if a row of the same day, amount and payment exists. */
+export type MoneyDraft = { date: string; amount: number; category: string; memo: string; pay: string; force?: boolean }
+/** The row being changed or removed: found again by day and amount, and its place among those. */
+export type MoneyRef = { month: string; date: string; amount: number; idx: number }
+/** What the card shows now: the month (it goes away when the owner looks elsewhere) or the form (stays until closed). */
+export type MoneyCardView = 'month' | 'form'

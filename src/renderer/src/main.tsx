@@ -19,10 +19,12 @@ import { Media } from './widgets/Media'
 import { TaskForm } from './widgets/TaskForm'
 import { CalCard } from './widgets/CalCard'
 import { Player } from './widgets/Player'
+import { Money } from './widgets/Money'
+import { MoneyCard } from './widgets/MoneyCard'
 import { addLatinFont } from './light/latinFont'
 
 // player: the full-screen view opened from the media widget (an ordinary window, see main/playerWindow.ts)
-const widgets: Record<string, () => React.JSX.Element> = { clock: Clock, calendar: Calendar, tasks: Tasks, battery: Battery, usage: Usage, launcher: Launcher, pet: Pet, media: Media, catcher: Catcher, player: Player }
+const widgets: Record<string, () => React.JSX.Element> = { clock: Clock, calendar: Calendar, tasks: Tasks, battery: Battery, usage: Usage, launcher: Launcher, pet: Pet, media: Media, money: Money, catcher: Catcher, player: Player }
 addLatinFont()
 const root = createRoot(document.getElementById('root')!)
 if (new URLSearchParams(location.search).get('widget') === 'taskform') {
@@ -35,6 +37,10 @@ if (new URLSearchParams(location.search).get('widget') === 'taskform') {
   // the card beside the calendar: an event's details, adding / editing one, or the subscriptions (main/calCard.ts)
   document.title = 'yuta-desk 予定'
   root.render(<CalCard />)
+} else if (new URLSearchParams(location.search).get('widget') === 'moneycard') {
+  // the household accounts' card beside the money widget (main/moneyCard.ts)
+  document.title = 'yuta-desk 家計簿'
+  root.render(<MoneyCard />)
 } else if (new URLSearchParams(location.search).get('widget') === 'petsheet') {
   // dev-only preview of the pet looks (scripts/pet-sheet.js); runs without the app's bridge
   document.title = 'yuta-desk petsheet'

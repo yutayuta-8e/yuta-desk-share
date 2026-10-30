@@ -23,7 +23,7 @@
       if (s) {
         state.title = s.title || ''
         state.artist = (s.user && s.user.username) || ''
-        state.artwork = (s.artwork_url || (s.user && s.user.avatar_url) || '').replace('-large.', '-t300x300.')
+        state.artwork = (s.artwork_url || (s.user && s.user.avatar_url) || '').replace('-large.', '-t500x500.')
         state.duration = (s.duration || 0) / 1000
       }
       widget.getPosition((ms) => { state.position = (ms || 0) / 1000; widget.isPaused((p) => { state.playing = !p; report() }) })

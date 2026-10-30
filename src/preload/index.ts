@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BatteryInfo, Bounds, CalCardRequest, CalCardView, CalendarData, Config, EventDetail, EventDraft, LauncherIcon, MediaState, SubDraft, TaskList, ThemeInfo, UsageData, WallpaperInfo, WidgetId } from '../shared/types'
+import type { BatteryInfo, Bounds, CalCardRequest, CalCardView, CalendarData, Config, EventDetail, EventDraft, LauncherIcon, MediaState, MoneyCardView, MoneyData, MoneyDraft, MoneyRef, SubDraft, TaskList, ThemeInfo, UsageData, WallpaperInfo, WidgetId } from '../shared/types'
 
 type Listener<T> = (payload: T) => void
+/** code: yuta's error_code (duplicate…), detail its error_detail. */
+type MoneyResult = { ok: boolean; message: string; code?: string; detail?: Record<string, unknown> }
 function on<T>(channel: string, fn: Listener<T>): () => void {
   const h = (_e: unknown, p: T) => fn(p)
   ipcRenderer.on(channel, h)
@@ -52,6 +54,17 @@ const api = {
   calEventDelete: (id: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('cal-event-delete', id),
   subsSave: (d: SubDraft, original?: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('subs-save', d, original),
   subsDelete: (name: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('subs-delete', name),
+  getMoney: (): Promise<MoneyData> => ipcRenderer.invoke('get-money'),
+  onMoney: (fn: Listener<MoneyData>) => on('money', fn),
+  moneyCardOpen: (month?: string, day?: number) => ipcRenderer.send('money-card-open', month, day),
+  onMoneyGoto: (fn: Listener<{ month: string; day: number | null }>) => on('money-goto', fn),
+  moneyCardClose: () => ipcRenderer.send('money-card-close'),
+  moneyCardPlace: (height: number, view: MoneyCardView) => ipcRenderer.send('money-card-place', height, view),
+  onMoneyCardState: (fn: Listener<boolean>) => on('money-card-state', fn),
+  onCursor: (fn: Listener<{ x: number; y: number }>) => on('cursor', fn),
+  moneyAdd: (d: MoneyDraft): Promise<MoneyResult> => ipcRenderer.invoke('money-add', d),
+  moneyFix: (ref: MoneyRef, d: MoneyDraft): Promise<MoneyResult> => ipcRenderer.invoke('money-fix', ref, d),
+  moneyRemove: (ref: MoneyRef): Promise<MoneyResult> => ipcRenderer.invoke('money-remove', ref),
   dragStart: (id: WidgetId) => ipcRenderer.send('drag-start', id),
   dragEnd: () => ipcRenderer.send('drag-end'),
   setEditMode: (on: boolean) => ipcRenderer.send('edit-mode-set', on),
@@ -73,7 +86,7 @@ const api = {
   onLauncherDragOver: (fn: Listener<{ x: number; y: number } | null>) => on('launcher-dragover', fn),
   petPoke: (id: WidgetId) => ipcRenderer.send('pet-poke', id),
   getWidgetRects: (): Promise<(Bounds & { id: WidgetId })[]> => ipcRenderer.invoke('get-widget-rects'),
-  onPetEvent: (fn: Listener<{ type: 'task-done' }>) => on('pet-event', fn),
+  onPetEvent: (fn: Listener<{ type: 'task-done' | 'money' }>) => on('pet-event', fn),
   onPoke: (fn: Listener<{ at: number }>) => on('poke', fn),
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
   onConfig: (fn: Listener<Config>) => on('config', fn),

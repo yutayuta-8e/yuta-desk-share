@@ -78,6 +78,8 @@ export function placeCalCard(height: number, v: View): void {
   }
   if (x < area.x) { x = cal.x + cal.width; tether = null } // no room on the left: the right side, without the line
   card.setBounds({ x: Math.round(x), y: Math.round(y), width: w, height: h })
+  // the glass draws the wallpaper behind it at this place (light/Refraction.tsx)
+  card.webContents.send('bounds', boundsOf(card))
   card.webContents.send('cal-card-tether', tether)
   if (!shown) { shown = true; card.show(); card.focus() }
 }

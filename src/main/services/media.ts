@@ -8,6 +8,7 @@ import { EventEmitter } from 'node:events'
 import { bootLog } from '../boot'
 import { getConfig } from '../config'
 import { getIcon } from './launcher'
+import { pageArtFor, startPageArt, stopPageArt } from './pageArt'
 import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import type { MediaState } from '../../shared/types'
@@ -87,7 +88,7 @@ function merge(): MediaState {
   if (smtc.active) {
     return {
       kind: 'app', app: smtc.app, status: smtc.status === 'Playing' ? 'Playing' : 'Paused', title: smtc.title, artist: smtc.artist,
-      thumbnail: smtcThumb, position: smtc.position, duration: smtc.duration, updatedAt: smtc.updatedAt || Date.now(),
+      thumbnail: pageArtFor(smtc.title) ?? smtcThumb, position: smtc.position, duration: smtc.duration, updatedAt: smtc.updatedAt || Date.now(),
       canNext: smtc.canNext, canPrev: smtc.canPrev, appIcon: iconCache.get(smtc.app) ?? null
     }
   }
@@ -97,6 +98,7 @@ function merge(): MediaState {
 export function startMediaService(): void {
   if (process.env.YD_SC_AUTOSTART && !player) setTimeout(playSoundCloud, 4000) // checks only
   if (bridge) return
+  startPageArt(emit)
   bridge = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', resource('media-bridge.ps1')], { windowsHide: true })
   let buf = ''
   bridge.stdout.setEncoding('utf8')
@@ -108,9 +110,9 @@ export function startMediaService(): void {
       buf = buf.slice(i + 1)
       if (!line) continue
       try {
-        if (process.env.YD_MEDIA_IGNORE_APPS) continue // checks only: behave as if no app were playing
         const o = JSON.parse(line) as Smtc | { volume: number }
         if ('volume' in o) { volumeWaiters.shift()?.(o.volume >= 0 ? o.volume : null); continue }
+        if (process.env.YD_MEDIA_IGNORE_APPS) continue // checks only: behave as if no app were playing
         const s = o
         if (s.active && 'thumbnail' in s) smtcThumb = s.thumbnail ?? null
         smtc = s
@@ -132,6 +134,7 @@ export function startMediaService(): void {
 
 export function stopMediaService(): void {
   restarts = 99
+  stopPageArt()
   bridge?.stdin.end()
   bridge?.kill()
   bridge = null
@@ -186,16 +189,12 @@ export function mediaSeek(sec: number): void {
 const volumeWaiters: ((v: number | null) => void)[] = []
 
 /**
- * The volume of what is playing, 0..1: our SoundCloud player's own, or the playing app's slider in
- * the Windows volume mixer (never the master volume). null when it cannot be read.
+ * The Windows master volume, 0..1 (0 while muted), whatever is playing: our SoundCloud player and
+ * the apps alike (the owner, 2026-10-30; until then each source's own volume). null when it cannot be
+ * read.
  */
 export function getMediaVolume(): Promise<number | null> {
-  const p = ourPlayer()
-  if (p) {
-    return p.webContents.executeJavaScript('new Promise((r) => window.yd ? window.yd.getVolume((v) => r(v)) : r(null))')
-      .then((v: unknown) => (typeof v === 'number' ? v / 100 : null), () => null)
-  }
-  if (current.kind !== 'app' || !bridge) return Promise.resolve(null)
+  if (!bridge) return Promise.resolve(null)
   return new Promise((resolve) => {
     const done = (v: number | null) => { clearTimeout(t); resolve(v) }
     const t = setTimeout(() => { const i = volumeWaiters.indexOf(done); if (i >= 0) volumeWaiters.splice(i, 1); resolve(null) }, 5000)
@@ -204,10 +203,9 @@ export function getMediaVolume(): Promise<number | null> {
   })
 }
 
+/** Sets the master volume; above 0 it also lifts a mute, as the Windows slider does. */
 export function setMediaVolume(v: number): void {
   if (!Number.isFinite(v)) return
   const x = Math.max(0, Math.min(1, v))
-  const p = ourPlayer()
-  if (p) { void p.webContents.executeJavaScript(`window.ydCommand && window.ydCommand('volume', ${Math.round(x * 100)})`); return }
-  if (current.kind === 'app') bridge?.stdin.write(`volume ${x.toFixed(3)}\n`)
+  bridge?.stdin.write(`volume ${x.toFixed(3)}\n`)
 }

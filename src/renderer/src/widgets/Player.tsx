@@ -108,18 +108,21 @@ export function Player() {
     yd.mediaSeek(sec)
   }
 
-  // volume of what is playing (our player's own, or that app's mixer slider); null = cannot be changed
+  // the Windows master volume, whatever is playing (owner, 2026-10-30); null = cannot be read. The
+  // keys and the taskbar change it too, so it is read again every 2 s, but not while the line is held
+  // or just after it was let go (the bridge may not have set it yet)
   const [vol, setVol] = useState<number | null>(null)
   const [volHeld, setVolHeld] = useState(false)
-  const source = active ? `${active.kind}|${active.app ?? ''}` : ''
-  useEffect(() => {
-    if (!source) { setVol(null); return }
-    let alive = true
-    void yd.getMediaVolume().then((v) => { if (alive) setVol(v) })
-    return () => { alive = false }
-  }, [source])
-  const volRef = useRef<HTMLSpanElement>(null)
   const lastSent = useRef(0)
+  useEffect(() => {
+    if (volHeld) return
+    let alive = true
+    const read = () => void yd.getMediaVolume().then((v) => { if (alive && Date.now() - lastSent.current > 1500) setVol(v) })
+    read()
+    const t = setInterval(read, 2000)
+    return () => { alive = false; clearInterval(t) }
+  }, [volHeld])
+  const volRef = useRef<HTMLSpanElement>(null)
   const volAt = (x: number) => { const r = volRef.current!.getBoundingClientRect(); return clamp01((x - r.left) / r.width) }
   const sendVol = (v: number, now = false) => {
     setVol(v)
@@ -185,7 +188,7 @@ export function Player() {
 
       <div className="pl-side">
         {active && (
-          <span className={`pl-vol ${vol === null ? 'off' : ''}`} title={vol === null ? 'この再生元の音量は変えられません' : `音量 ${Math.round(vol * 100)}`}>
+          <span className={`pl-vol ${vol === null ? 'off' : ''}`} title={vol === null ? '音量を読めません' : `音量 ${Math.round(vol * 100)}`}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d={SPEAKER} /></svg>
             <span className="pl-vol-line" ref={volRef} onPointerDown={onVolDown} onPointerMove={onVolMove} onPointerUp={onVolUp} onPointerCancel={() => setVolHeld(false)}>
               <span className="lt-line"><i style={{ width: `${(vol ?? 0) * 100}%` }} /></span>

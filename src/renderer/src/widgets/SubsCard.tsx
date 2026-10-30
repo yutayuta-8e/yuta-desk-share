@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { yd } from '../api'
 import { useFeed } from '../hooks'
 import { useLightTheme } from '../light/Light'
+import { Refraction } from '../light/Refraction'
 import type { CalendarMark, SubDraft } from '@shared/types'
 
 const getCal = () => yd.getCalendar()
@@ -35,6 +36,37 @@ function nextOf(m: CalendarMark, today: Date): Date {
 }
 
 const leftWord = (n: number) => (n === 0 ? '今日' : n === 1 ? '明日' : `あと${n}日`)
+
+/**
+ * The tops of the name and the price sit on the top of the large day (owner, 2026-10-29). The three
+ * columns share a baseline, and each is lowered by how much taller its ink stands than the day's,
+ * measured from the text itself: kanji and kana stand taller than Latin letters and digits, so one
+ * fixed amount left names in Latin letters low.
+ */
+function useInkTops(card: React.RefObject<HTMLDivElement | null>, deps: unknown[]) {
+  useLayoutEffect(() => {
+    const root = card.current
+    if (!root) return
+    let alive = true
+    const ctx = document.createElement('canvas').getContext('2d')!
+    const ascent = (el: Element | null | undefined) => {
+      if (!el) return 0
+      const cs = getComputedStyle(el)
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+      return ctx.measureText(el.textContent ?? '').actualBoundingBoxAscent
+    }
+    const apply = () => {
+      if (!alive) return
+      root.querySelectorAll<HTMLElement>('.sr').forEach((r) => {
+        const day = ascent(r.querySelector('.num'))
+        r.querySelectorAll<HTMLElement>('.nm, .amt').forEach((col) => { col.style.top = `${(ascent(col.firstElementChild) - day).toFixed(2)}px` })
+      })
+    }
+    apply()
+    void document.fonts.ready.then(apply)
+    return () => { alive = false }
+  }, deps)
+}
 
 /**
  * The subscriptions (2026-10-28, design 4 of 5, chosen by the owner): monthly and yearly apart, the
@@ -75,10 +107,12 @@ export function SubsCard() {
       return { name: m.name, month: m.month, day: m.day, next, left: Math.round((+next - +today) / 86400000), ...priceOf(m.note) }
     }).sort((a, b) => +a.next - +b.next)
   }, [cal])
+  useInkTops(ref, [subs, form, chosen])
 
   return (
     <div className="calcard subs-card">
       <div ref={ref} className="gcard subs">
+        <Refraction />
         {form
           ? <SubForm original={form.original} onDone={() => setForm(null)} />
           : <SubList subs={subs} chosen={chosen} setChosen={setChosen} onEdit={(s) => setForm({ original: s })} onAdd={() => setForm({})} />}
@@ -128,7 +162,6 @@ function SubList({ subs, chosen, setChosen, onEdit, onAdd }: {
       {!subs.length && <div className="note">まだありません。下から足せます。</div>}
       {err && <div className="err" role="alert">{err}</div>}
       <button type="button" className="add" onClick={onAdd}>＋ サブスクを足す</button>
-      {subs.some((s) => s.usd) && <div className="note">ドル払いは 1ドル＝{USD_JPY}円 で円にしています</div>}
     </>
   )
 }
@@ -178,7 +211,6 @@ function SubForm({ original, onDone }: { original?: Sub; onDone: () => void }) {
           <button type="button" className={`chip ${currency === 'USD' ? 'on' : ''}`} onClick={() => setCurrency('USD')}>USD</button>
         </div>
       </div>
-      <div className="note">Vault の「サブスクとお金の日」に書きます</div>
       {err && <div className="err" role="alert">{err}</div>}
       <div className="buttons">
         <button type="button" onClick={onDone}>やめる</button>

@@ -23,6 +23,10 @@ export type PetPose = {
   flee: boolean
   /** which pair of eyes and mouth (PET_FACES); the other expressions are shared */
   faceStyle?: number
+  /** how far each cheek (left, right) has wandered from its place on the face (Pet.tsx's springs) */
+  cheeks?: { dx: number; dy: number }[]
+  /** the sheet's blush: round, or three quick strokes */
+  cheekStyle?: 'round' | 'lines'
 }
 
 /** Eye-and-mouth pairs for the usual, open-eyed look (2026-10-27: the owner asked for five cuter ones). */
@@ -162,27 +166,56 @@ function body(ctx: CanvasRenderingContext2D, variant: string, g: Geo, p: PetPose
 }
 
 /**
- * Blush: a big round cheek on each side (2026-10-28: the owner chose round cheeks, much larger),
- * its outline gently rippling, as if the light were wavering. The ripple drifts slowly round.
+ * Blush on the sheet: a big round cheek on each side with its outline gently rippling (2026-10-28:
+ * the owner chose round cheeks, much larger), or three quick strokes with wide gaps (2026-10-29: the
+ * owner went back to the strokes, wider apart, and they are the usual blush now).
+ * 2026-10-29 (owner): pushed out well past the outline, more than half of each outside, and lowered so
+ * the top of the blush is level with the top of the mouth. Each cheek moves on its own: it rests here,
+ * and Pet.tsx hangs it on a spring so it lags, bounces and wobbles after the face (pose.cheeks).
  */
-function cheeks(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
-  const float = Math.sin(p.t * 2.4) * 0.8
-  const y = g.ey + 7.5 + float
-  // three slow bumps: at this size more of them read as corners (a heptagon), not as a wave
-  const rx = 7, ry = 4.4, bumps = 3, depth = 0.07, steps = 72
-  for (const side of [-1, 1]) {
-    const c = g.cx + side * (g.bw / 2 - 12) + p.dir * 1
+const ROUND = { rx: 7, ry: 4.4 }
+const LINES = { gap: 6.5, h: 6.5, slant: 1.7 }
+/** How far below the eyes each face's mouth begins (see mouth()). */
+const MOUTH_TOP: Record<string, number> = { line: 12, round: 11, happy: 10, omega: 10, sparkle: 11, droopy: 10.75 }
+
+export function cheekRest(size: number, p: PetPose, variant: string): { x: number; y: number }[] {
+  const g = geometry(size, p, variant)
+  const top = g.ey + (MOUTH_TOP[PET_FACES[p.faceStyle ?? 0]?.id ?? 'line'] ?? 12)
+  const y = top + (p.cheekStyle !== 'round' ? LINES.h / 2 : ROUND.ry)
+  // the outline is about 29 px from the middle at this height; the cheek's middle sits outside it
+  return [-1, 1].map((side) => ({ x: g.cx + side * (g.bw / 2 - 0.5) + p.dir * 1, y }))
+}
+
+function cheeks(ctx: CanvasRenderingContext2D, rest: { x: number; y: number }[], p: PetPose) {
+  rest.forEach((r, i) => {
+    const side = i ? 1 : -1
+    const off = p.cheeks?.[i] ?? { dx: 0, dy: 0 }
+    // each cheek floats to its own beat
+    const c = r.x + off.dx, y = r.y + off.dy + Math.sin(p.t * 2.4 + (side > 0 ? 1.1 : 0)) * 0.8
+    if (p.cheekStyle !== 'round') {
+      // three strokes, / / /, each trembling a little on its own
+      for (let j = -1; j <= 1; j++) {
+        const x = c + j * LINES.gap, w = Math.sin(p.t * 3.1 + j * 2 + side) * 0.3
+        ctx.beginPath()
+        ctx.moveTo(x - LINES.slant, y + LINES.h / 2 + w)
+        ctx.lineTo(x + LINES.slant, y - LINES.h / 2 + w)
+        ctx.stroke()
+      }
+      return
+    }
+    // three slow bumps: at this size more of them read as corners (a heptagon), not as a wave
+    const bumps = 3, depth = 0.07, steps = 72
     const drift = p.t * 1.3 + (side > 0 ? 1.7 : 0)
     ctx.beginPath()
-    for (let i = 0; i <= steps; i++) {
-      const a = (i / steps) * Math.PI * 2
+    for (let j = 0; j <= steps; j++) {
+      const a = (j / steps) * Math.PI * 2
       const k = 1 + depth * Math.sin(a * bumps + drift)
-      const x = c + Math.cos(a) * rx * k, yy = y + Math.sin(a) * ry * k
-      if (i) ctx.lineTo(x, yy); else ctx.moveTo(x, yy)
+      const x = c + Math.cos(a) * ROUND.rx * k, yy = y + Math.sin(a) * ROUND.ry * k
+      if (j) ctx.lineTo(x, yy); else ctx.moveTo(x, yy)
     }
     ctx.closePath()
     ctx.stroke()
-  }
+  })
 }
 
 function face(ctx: CanvasRenderingContext2D, g: Geo, p: PetPose) {
@@ -268,7 +301,8 @@ function lanternOrb(g: Geo, p: PetPose): { x: number; y: number } {
 /** Draws the pet at the centre bottom of a size x size canvas (already cleared and scaled). */
 export function drawPet(ctx: CanvasRenderingContext2D, size: number, variant: string, p: PetPose, ink: PetInk, breath: number, k: number): void {
   const g = geometry(size, p, variant)
-  const lines = () => { body(ctx, variant, g, p); face(ctx, g, p); if (variant === 'sheet') cheeks(ctx, g, p) }
+  const rest = variant === 'sheet' ? cheekRest(size, p, variant) : null
+  const lines = () => { body(ctx, variant, g, p); face(ctx, g, p); if (rest) cheeks(ctx, rest, p) }
   ctx.lineCap = 'round'; ctx.lineJoin = 'round'
   // halo (breathes with every other widget), then the thin core line
   ctx.globalAlpha = breath

@@ -21,14 +21,16 @@ export function defaultConfig(): Config {
     widgets: {
       clock: w(418, 30, 700, 300, { card: false }),
       battery: w(40, 40, 320, 150, { card: false }),
-      usage: w(40, 190, 340, 320, { card: false }),
+      usage: w(40, 260, 340, 260, { card: false }),
       tasks: w(40, 520, 420, 300, { card: false }),
       launcher: w(1196, 40, 300, 380, { card: false }),
       // six weeks always and four rows below them (design 2, 2026-10-28)
       calendar: w(1156, 422, 340, CALENDAR_H, { card: false }),
       pet: w(600, 700, 300, 210, { opacity: 0, blur: 0 }),
       // bottom centre, just above the taskbar (owner, 2026-10-27)
-      media: w(538, 812, 460, 96, { card: false })
+      media: w(538, 812, 460, 96, { card: false }),
+      // the household accounts, in the top-left corner the battery left (owner, 2026-10-29)
+      money: w(40, 22, 440, 236, { card: false })
     },
     launcher: { rows: 3, cols: 3, iconStyle: 'clear', items: [] },
     calendar: { hiddenIds: [], refreshMinutes: 10 },

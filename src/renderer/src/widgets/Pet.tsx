@@ -6,7 +6,8 @@ import { PET_PHRASES } from '@shared/petPhrases'
 import { TEST_BG, TestUnderlay } from '../light/testBg'
 import { timeOfDay } from '../light/timeOfDay'
 import { hmNow } from '../light/clockTime'
-import { PET_VARIANTS, drawPet, headTop, trailOrigin } from '../light/petDraw'
+import { PET_VARIANTS, cheekRest, drawPet, headTop, trailOrigin } from '../light/petDraw'
+import { Refraction } from '../light/Refraction'
 
 /**
  * The pet: a little creature drawn as one line of light. Its look is provisional (the owner will
@@ -30,8 +31,14 @@ const BODY = 64
 const DEBUG_VARIANT = new URLSearchParams(location.search).get('petvariant')
 const WALK = 38 // px/s
 const FLY = 150 // px/s
+// the cheeks' springs (2026-10-29): left and right a little different, so they never move as one
+const CHEEK_K = [150, 190]
+const CHEEK_C = 7
+const CHEEK_MAX = 4 // px a cheek may wander from its place
 const PHRASES = PET_PHRASES
 const CHEERS = ['えらい！', 'やったね！', 'おつかれさま！']
+// when the owner writes a payment down in the household accounts (2026-10-29)
+const MONEY_CHEERS = ['きちょう えらい！', 'メモしたよ！', 'ちゃりん！']
 const DEMO = new URLSearchParams(location.search).get('petdemo') === '1'
 
 type After = 'hover' | 'perch' | 'tease' | 'land'
@@ -41,6 +48,7 @@ type Sim = {
   tx: number; ty: number; after: After; teaseId: WidgetId | null; flee: boolean
   surfaceY: number; perch: Bounds | null; trail: { x: number; y: number }[]
   route: { x: number; y: number }[]
+  cheeks?: { dx: number; dy: number }[]
 }
 type Rect = Bounds & { id: WidgetId }
 
@@ -76,6 +84,8 @@ export function Pet() {
   const [bubble, setBubble] = useState<{ text: string; shown: number; side: 1 | -1; leaving: boolean } | null>(null)
   const typeTimer = useRef<number | null>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
+  // a glass bubble (2026-10-29, a choice in the pet's menu) is redrawn as the pet and its head move
+  const [glassAt, setGlassAt] = useState<{ x: number; y: number; k: number } | null>(null)
   // test harness only: where the pet window is, so the test wallpaper can be drawn behind it
   const [testPos, setTestPos] = useState<{ x: number; y: number } | null>(null)
   const bubbleTimer = useRef<number | null>(null)
@@ -85,6 +95,10 @@ export function Pet() {
   variantRef.current = DEBUG_VARIANT ?? PET_VARIANTS[cfg?.pet.variant ?? 0]?.id ?? 'classic'
   const faceRef = useRef(0)
   faceRef.current = cfg?.pet.face ?? 5
+  const cheekRef = useRef<'round' | 'lines'>('lines')
+  cheekRef.current = cfg?.pet.cheek ?? 'lines'
+  const bubbleGlassRef = useRef(false)
+  bubbleGlassRef.current = cfg?.pet.bubbleGlass ?? false
 
   /** Says something: a bubble pops up on the side the pet faces and the words appear one by one. */
   const say = (raw: string, ms = 2500) => {
@@ -149,6 +163,29 @@ export function Pet() {
     let lastAnnounced = hmNow()
     let lastCursor = { x: -1, y: -1 }
     let lastDodge = 0
+    // Each cheek hangs on a spring of its own (2026-10-29, owner: the cheeks move by themselves). The
+    // springs live in screen space, so the cheeks lag when the pet walks or flies, bounce after a hop
+    // and wobble when it squashes; what is drawn is eased so they never leave the face.
+    let springs: { x: number; y: number; vx: number; vy: number }[] | null = null
+    const moveCheeks = (s: Sim, dt: number) => {
+      if (variantRef.current !== 'sheet') { springs = null; s.cheeks = undefined; return }
+      const rest = cheekRest(SIZE, { ...s, faceStyle: faceRef.current, cheekStyle: cheekRef.current }, 'sheet').map((r) => ({ x: s.x + PX + r.x, y: s.y + PY + r.y }))
+      // first frame, or the window jumped (placed somewhere else): start at rest
+      if (!springs || rest.some((r, i) => Math.hypot(r.x - springs![i].x, r.y - springs![i].y) > 80)) springs = rest.map((r) => ({ ...r, vx: 0, vy: 0 }))
+      const n = Math.max(1, Math.ceil(dt / 0.012)), h = dt / n
+      springs.forEach((c, i) => {
+        for (let j = 0; j < n; j++) {
+          c.vx += (CHEEK_K[i] * (rest[i].x - c.x) - CHEEK_C * c.vx) * h
+          c.vy += (CHEEK_K[i] * (rest[i].y - c.y) - CHEEK_C * c.vy) * h
+          c.x += c.vx * h; c.y += c.vy * h
+        }
+      })
+      s.cheeks = springs.map((c, i) => {
+        const dx = c.x - rest[i].x, dy = c.y - rest[i].y, d = Math.hypot(dx, dy)
+        const f = d > 0 ? CHEEK_MAX * Math.tanh(d / CHEEK_MAX) / d : 0
+        return { dx: dx * f, dy: dy * f }
+      })
+    }
     const cursorTimer = window.setInterval(() => {
       void yd.getCursor().then((c) => {
         const moved = lastCursor.x >= 0 && Math.hypot(c.x - lastCursor.x, c.y - lastCursor.y) > 3
@@ -352,12 +389,14 @@ export function Pet() {
         })
         ctx.globalAlpha = 1
       }
-      drawPet(ctx, SIZE, variant, { ...s, faceStyle: faceRef.current }, ink, breath, k)
+      drawPet(ctx, SIZE, variant, { ...s, faceStyle: faceRef.current, cheekStyle: cheekRef.current }, ink, breath, k)
       // the bubble follows the head (hops, bobbing), a little above it
       const b = bubbleRef.current
       if (b) {
         const head = PY + headTop(SIZE, s, variant)
-        b.style.bottom = `${Math.max(24, Math.min(WIN_H - 34, WIN_H - head + 22))}px`
+        const k = Math.max(24, Math.min(WIN_H - 34, WIN_H - head + 22))
+        b.style.bottom = `${k}px`
+        if (bubbleGlassRef.current) setGlassAt((o) => (o && Math.abs(o.x - s.x) < 0.5 && Math.abs(o.y - s.y) < 0.5 && Math.abs(o.k - k) < 0.5 ? o : { x: s.x, y: s.y, k }))
       }
     }
 
@@ -431,6 +470,7 @@ export function Pet() {
         const calm = s.state === 'idle' || s.state === 'perch' || s.state === 'hover'
         if (calm && Math.abs(dx) < 220 && Math.abs(dy) < 220) s.dir = dx < 0 ? -1 : 1
         s.blink = s.blink > 0 ? s.blink - dt : (Math.random() < 0.006 ? 0.14 : 0)
+        moveCheeks(s, dt)
         draw(s)
         if (TEST_BG) setTestPos((p) => (p && Math.abs(p.x - s.x) < 1 && Math.abs(p.y - s.y) < 1 ? p : { x: s.x, y: s.y }))
       }
@@ -441,10 +481,10 @@ export function Pet() {
 
     const offEvent = yd.onPetEvent((ev) => {
       const s = sim.current
-      if (!s || ev.type !== 'task-done') return
+      if (!s || (ev.type !== 'task-done' && ev.type !== 'money')) return
       wake(s, performance.now())
       hop(s)
-      sayRef.current(pick(CHEERS), 2200)
+      sayRef.current(pick(ev.type === 'money' ? MONEY_CHEERS : CHEERS), 2200)
     })
 
     raf = requestAnimationFrame(step)
@@ -473,7 +513,8 @@ export function Pet() {
       {TEST_BG && testPos && <TestUnderlay wp={wp} bounds={{ x: testPos.x, y: testPos.y, width: WIN_W, height: WIN_H }} zoom={1} />}
       <canvas ref={canvas} />
       {bubble && (
-        <div ref={bubbleRef} className={`pet-bubble ${bubble.side > 0 ? 'right' : 'left'} ${bubble.leaving ? 'leaving' : ''}`} aria-live="polite">
+        <div ref={bubbleRef} className={`pet-bubble ${bubble.side > 0 ? 'right' : 'left'} ${bubble.leaving ? 'leaving' : ''} ${cfg?.pet.bubbleGlass ? 'glassy' : ''}`} aria-live="polite">
+          {cfg?.pet.bubbleGlass && glassAt && <Refraction shape="pill" at={glassAt} />}
           <span className="text">{[...bubble.text].slice(0, Math.max(1, bubble.shown)).join('')}</span>
           {/* the full text keeps the bubble's size steady while the words type in */}
           <span className="sizer" aria-hidden="true">{bubble.text}</span>

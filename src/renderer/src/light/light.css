@@ -319,6 +319,9 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
   animation: pet-bubble-in 0.36s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .pet-bubble .text, .pet-bubble .sizer { grid-area: 1 / 1; }
+/* the glass bubble: the glass fills the whole pill, its outline of light stays on top */
+.pet-bubble.glassy { isolation: isolate; }
+.pet-bubble > canvas.refract { inset: -1.5px; width: calc(100% + 3px); height: calc(100% + 3px); border-radius: 999px; }
 .pet-bubble .sizer { visibility: hidden; }
 .pet-bubble.right { left: 160px; transform-origin: 0% 100%; }
 .pet-bubble.left { right: 160px; transform-origin: 100% 100%; }
@@ -367,11 +370,20 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
 .player .pl-sc { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); font-size: 18px; }
 
 /* ---------- see-through cards (owner, 2026-10-28): the calendar's event card and the add / edit windows, the task window ----------
-   square, a very thin 10 % film, no blur, frame or drop shadow; two straight lines of light a fifth of
+   square, a very thin 10 % film, no blur, frame or drop shadow (2026-10-29: the wallpaper under the film is bent
+   at the rim like a slab of glass, see light/Refraction.tsx); two straight lines of light a fifth of
    the width long, fading toward the middle: along the top from the right corner, along the bottom
    from the left. Buttons and choices have no box, only a line underneath that fades toward both ends. */
 .gcard { position: relative; box-sizing: border-box; padding: 18px 20px; background: color-mix(in srgb, #120c18 10%, transparent); color: var(--ink);
   display: flex; flex-direction: column; gap: 12px; font-family: 'YD Latin', 'Zen Kurenaido', 'Yu Gothic UI', sans-serif; font-variant-numeric: lining-nums; }
+/* the glass (light/Refraction.tsx, 2026-10-29): the wallpaper bent at the rim, drawn behind the contents of a
+   card, a widget's frame (.glass.slab) or the pet's bubble (.pet-bubble.glassy) */
+.gcard { isolation: isolate; }
+canvas.refract { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+/* a widget on a slab carries the cards' two lines of light: along the top from the right, along the bottom from the left */
+.glass.slab::before, .glass.slab::after { content: ''; position: absolute; width: 20%; height: 1.5px; pointer-events: none; z-index: 1; filter: drop-shadow(0 0 3px var(--halo)); }
+.glass.slab::before { top: 0; right: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 80%, transparent)); }
+.glass.slab::after { bottom: 0; left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 80%, transparent), transparent); }
 .gcard::before, .gcard::after { content: ''; position: absolute; width: 20%; height: 1.5px; pointer-events: none; filter: drop-shadow(0 0 3px var(--halo)); }
 .gcard::before { top: 0; right: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 80%, transparent)); }
 .gcard::after { bottom: 0; left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 80%, transparent), transparent); }
@@ -451,13 +463,15 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
 .subs .count, .subs .sh { font-size: 12.5px; }
 .subs .sec { display: flex; flex-direction: column; gap: 8px; }
 .subs .sec.rule { padding-top: 12px; }
-.subs .sr { display: grid; grid-template-columns: 3.1em 1fr auto; column-gap: 12px; align-items: baseline; cursor: pointer; }
-.subs .sr .num { font-size: 24px; line-height: 1; text-align: right; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
-.subs .sr .num.md { font-size: 19px; }
+.subs .sr { display: grid; grid-template-columns: 3.4em 1fr auto; column-gap: 12px; align-items: baseline; cursor: pointer; }
+.subs .sr .num { font-size: 28.8px; line-height: 1; text-align: right; text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
+.subs .sr .num.md { font-size: 22.8px; } /* the days 20 % larger (owner, 2026-10-29) */
 .subs .sr .nm { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 15.5px; }
 .subs .sr .nm > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 0 4px var(--halo-soft); }
 .subs .sr .amt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 14px; white-space: nowrap; text-shadow: 0 0 4px var(--halo-soft); }
 .subs small { font-size: 12px; }
+/* the name and the price are lowered to the top of the large day by SubsCard.tsx (useInkTops, measured per row) */
+.subs .sr .nm, .subs .sr .amt { position: relative; }
 .subs .sr:hover .nm > span, .subs .sr.on .nm > span { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo); }
 .subs .acts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 .subs .acts button { font-size: 13px; padding: 3px 12px 5px; }
@@ -465,3 +479,122 @@ html, body, #root { font-family: 'YD Latin', 'Zen Kurenaido', 'M PLUS Rounded 1c
 .subs .add::after { display: none; }
 .subs .add:hover { color: var(--ink); }
 .subs .two .chips.unit { flex: none; padding-bottom: 4px; }
+
+/* ---------- the household accounts (2026-10-29): this month's spending in light, a point of light per day,
+   one line of light split by what the money went on; the card beside it with the rows, the categories,
+   the months, and the form ---------- */
+/* the words are one block with one left edge and one right edge (that of the sum); the eyes float in the whole window around it */
+.v2-money .content { padding: 12px 14px 10px; font-feature-settings: 'palt'; }
+.v2-money .mw { position: relative; display: block; height: 100%; cursor: pointer; outline: none; }
+.v2-money .mw-top { position: relative; z-index: 2; display: inline-flex; flex-direction: column; pointer-events: none; }
+.v2-money .mw-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.v2-money .mw-month { font-size: 16px; }
+.v2-money .mw-pace { font-size: 12px; color: color-mix(in srgb, var(--ink) 78%, transparent); text-shadow: 0 0 4px var(--halo-soft); white-space: nowrap; }
+.v2-money .mw-total { display: flex; align-items: flex-end; gap: 5px; }
+.v2-money .mw-total .yen { font-size: 15px; line-height: 1; margin-bottom: -2px; }
+.v2-money .mw-list { margin-top: 7px; font-size: 12px; }
+.v2-money .mw-line { display: flex; align-items: center; gap: 8px; height: 22px; text-shadow: 0 0 4px var(--halo-soft); }
+.v2-money .mw-line span { color: color-mix(in srgb, var(--ink) 78%, transparent); }
+.v2-money .mw-line i { flex: none; width: 6px; height: 6px; transform: rotate(45deg); }
+.v2-money .mw-line em { margin-left: auto; font-size: 16px; font-style: normal; }
+/* a sum in light: the groups of three digits, and a short slanted stroke for the comma, dipping under the line */
+.lt-amount { display: inline-flex; align-items: flex-end; }
+.lt-amount .grp { display: inline-flex; align-items: flex-end; }
+.lt-amount .comma { display: inline-block; width: 2px; border-radius: 1px; background: var(--ink); transform: translateY(30%) skewX(-16deg); box-shadow: 0 0 4px var(--halo-soft); }
+.lt-amount .sign { margin-right: 4px; }
+.v2-money .me-field { position: absolute; left: -14px; top: -12px; right: -14px; bottom: -10px; }
+.v2-money .me-eye { position: absolute; width: 0; height: 0; transition: left 3s ease, top 3s ease; }
+.v2-money .me-turn { position: absolute; left: 0; top: 0; pointer-events: none; }
+.v2-money .me-part { position: absolute; left: 0; top: 0; display: block; line-height: 0; }
+.v2-money .me-part canvas { display: block; }
+.v2-money .me-clip { position: absolute; left: 0; top: 0; }
+.v2-money .me-gaze { position: absolute; width: 0; height: 0; }
+.v2-money .me-shine { position: absolute; display: block; border-radius: 50%; background: rgba(244, 236, 214, 0.82); }
+.v2-money .me-hit { position: absolute; border-radius: 50%; }
+.v2-money .me-tag { position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; white-space: nowrap; font-size: 12px; opacity: 0; transition: opacity 160ms ease; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.7); }
+.v2-money .me-hit:hover .me-tag { opacity: 1; }
+
+.moneycard { width: 100vw; }
+/* three sizes of words only: 17 the month, 14 what is read, 12 what is beside it. Everything starts on one left edge */
+.mcard { width: 100vw; gap: 12px; font-feature-settings: 'palt'; }
+.mcard .count, .mcard .m-side, .mcard .dh, .mcard .mnote, .mcard .mmeta, .mcard .m-legend, .mcard .m-filter, .mcard .m-conv, .mcard .m-dup,
+.mcard .m-net .yen, .mcard .mr .mn, .mcard .mr .ma, .mcard .mcat { text-shadow: 0 0 4px var(--halo-soft); }
+.mcard .chips { gap: 6px 18px; }
+.mcard .chip { font-size: 14px; padding: 3px 0 6px; }
+.mcard button { font-size: 14px; }
+.mcard label, .mcard .lab { font-size: 12px; }
+.mcard .check { font-size: 14px; }
+.mcard input[type=text], .mcard input[type=date] { font-size: 15px; padding: 4px 0 5px; }
+.mcard .m-top { display: flex; align-items: baseline; gap: 6px; }
+.mcard .m-top h1 small { font-size: 12px; color: var(--ink-dim); }
+.mcard .m-nav { display: flex; }
+.mcard .m-nav button { font-size: 18px; line-height: 1; padding: 0 7px 2px; }
+.mcard .count { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+.mcard .m-sum { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: -8px; }
+.mcard .m-net { display: flex; align-items: flex-end; gap: 4px; }
+.mcard .m-net .yen { font-size: 14px; line-height: 1; margin-bottom: -1px; }
+.mcard .m-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--ink-dim); white-space: nowrap; padding-bottom: 3px; }
+.mcard .m-tabs { margin-top: 2px; }
+.mcard .m-list { max-height: 318px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px; margin-bottom: -10px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
+.mcard .m-day .dh { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-dim); padding-bottom: 3px; margin-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+/* the category beside the name; a long name gives way before the category does */
+.mcard .mr { position: relative; display: grid; grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) 4.6em; column-gap: 12px; align-items: baseline; padding: 3px 0; cursor: pointer; font-size: 14px; }
+.mcard .mr .mn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcard .mr .mc { padding-left: 2px; font-size: 12px; color: var(--ink-dim); }
+.mcard .mr .ma { text-align: right; white-space: nowrap; }
+.mcard .mr.refund .ma, .mcard .mr.income .ma { color: var(--holi); text-shadow: 0 0 6px var(--holi-glow); }
+.mcard .mr:hover .mn, .mcard .mr.on .mn { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo); }
+/* the row just written: a band of light that fades */
+.mcard .mr.flash::before { content: ''; position: absolute; inset: -2px -20px; z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--halo) 34%, transparent) 30%, color-mix(in srgb, var(--halo) 34%, transparent) 70%, transparent);
+  animation: m-flash 2.6s ease-out forwards; }
+@keyframes m-flash { 0%, 35% { opacity: 1; } 100% { opacity: 0; } }
+.mcard .mdet { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 8px; font-size: 12px; }
+.mcard .mnote { color: var(--ink-dim); overflow-wrap: anywhere; }
+.mcard .mmeta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-dim); }
+.mcard .acts { display: flex; justify-content: flex-end; gap: 10px; }
+.mcard .acts button { padding: 3px 12px 5px; }
+/* looking through every month: a line to write in, quieter than the form's fields */
+.mcard input.m-search { font-size: 14px; padding: 2px 0 5px; margin-top: -2px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); }
+.mcard input.m-search::placeholder { color: var(--ink-dim); opacity: 0.8; }
+/* the day pressed in the widget's sky: its heading lit */
+.mcard .m-day.goto .dh { color: var(--ink); border-bottom-color: color-mix(in srgb, var(--ink) 60%, transparent); text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo-soft); }
+.mcard .m-recat { gap: 2px 12px; margin-top: 2px; }
+.mcard .m-recat .chip { font-size: 12px; padding: 2px 0 4px; }
+.mcard .m-filter { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; margin: -4px 0 -6px; }
+.mcard .m-filter button { font-size: 12px; }
+.mcard .m-cats { display: flex; flex-direction: column; gap: 2px; }
+.mcard .mcat { display: grid; grid-template-columns: 4.6em 1fr 4.6em 2.6em; column-gap: 10px; align-items: center; padding: 4px 0; font-size: 14px; text-align: left; }
+.mcard .mcat::after { display: none; }
+.mcard .mcat .cbar { position: relative; height: 2.5px; }
+.mcard .mcat .cbar i { position: absolute; left: 0; top: 0; height: 2.5px; border-radius: 2px; background: var(--ink); box-shadow: 0 0 6px var(--halo), 0 0 2px var(--halo); }
+.mcard .mcat:hover .cn { text-shadow: 0 0 3px var(--halo), 0 0 10px var(--halo); }
+.mcard .mcat .ca { text-align: right; white-space: nowrap; }
+.mcard .mcat .cp { text-align: right; font-size: 12px; color: var(--ink-dim); }
+.mcard .mcat.income .ca { color: var(--holi); text-shadow: 0 0 6px var(--holi-glow); }
+.mcard .m-months .bars { position: relative; display: flex; align-items: stretch; gap: 2px; }
+.mcard .m-months .mbar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; outline: none; }
+.mcard .m-months .col { flex: 1; min-height: 0; display: flex; align-items: flex-end; }
+.mcard .m-months .col i { width: 3px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 55%, transparent); box-shadow: 0 0 4px var(--halo-soft); }
+.mcard .m-months .mbar:hover .col i { background: var(--ink); }
+.mcard .m-months .mbar.on .col i { width: 4px; background: var(--ink); box-shadow: 0 0 8px var(--halo), 0 0 2px var(--halo); }
+/* this month is still growing: its line fades out at the top */
+.mcard .m-months .mbar.begun .col i { opacity: 0.45; }
+.mcard .m-months .mbar.now .col i { -webkit-mask-image: linear-gradient(to top, #000 70%, transparent); }
+.mcard .m-months .mbar small { height: 14px; font-size: 12px; line-height: 14px; color: var(--ink-dim); }
+.mcard .m-months .mbar.on small { color: var(--ink); }
+.mcard .m-months .avg { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--ink) 38%, transparent); pointer-events: none; }
+.mcard .m-legend { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 12px; }
+.mcard .m-legend .dim { color: var(--ink-dim); }
+.mcard .add { align-self: flex-start; font-size: 14px; color: var(--ink-dim); padding: 2px 0 4px; }
+.mcard .add::after { display: none; }
+.mcard .add:hover { color: var(--ink); }
+.mcard .two { display: flex; gap: 12px; align-items: flex-end; }
+.mcard .two label { flex: 1; min-width: 0; }
+.mcard .two .chips.unit { flex: none; padding-bottom: 4px; }
+.mcard .two .check { flex: none; padding-bottom: 7px; }
+.mcard .m-conv { margin-top: -6px; font-size: 12px; color: var(--ink-dim); }
+.mcard .m-dup { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--ink); }
+.mcard .m-dup button { align-self: flex-end; padding: 3px 12px 5px; }
