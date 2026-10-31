@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yuta-desk</title>
+<meta name="description" content="Windows のデスクトップに置く個人用ウィジェットアプリ yuta-desk の説明とプライバシーポリシー">
+<style>
+  :root { color-scheme: light dark; --bg: #f3f1f6; --ink: #24212b; --soft: #5f5a6b; --line: #cfc9d8; --link: #5a3f8c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17151c; --ink: #e9e6ef; --soft: #a9a3b6; --line: #38333f; --link: #c3aee8; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.85 "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif; }
+  main { max-width: 38rem; margin: 0 auto; padding: 4rem 1rem 5rem; }
+  h1 { margin: 0 0 1rem; font-size: 2.25rem; font-weight: 300; line-height: 1.2; }
+  h2 { margin: 3.5rem 0 .75rem; padding-top: 1.5rem; border-top: 1px solid var(--line); font-size: 1.3rem; font-weight: 500; }
+  h3 { margin: 1.75rem 0 .25rem; font-size: 1rem; font-weight: 600; }
+  p, ul { margin: 0 0 .75rem; }
+  ul { padding-left: 1.25rem; }
+  a { color: var(--link); }
+  a:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  .date { margin-top: 2rem; color: var(--soft); font-size: .875rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>yuta-desk</h1>
+  <p>Windows のデスクトップに時計、カレンダー、タスクなどを置くウィジェットアプリです。作者が自分の PC で使うために作っている個人用のアプリで、一般向けのサービスは提供していません。</p>
+  <p>Google カレンダーは、カレンダーのウィジェットに予定を表示し、そこから予定を追加、変更、削除するために使います。</p>
+  <p>ソースコードは <a href="https://github.com/yutayuta-8e/yuta-desk-share">GitHub</a> で見られます。</p>
+
+  <h2 id="privacy">プライバシーポリシー</h2>
+
+  <h3>扱う情報</h3>
+  <p>Google アカウントで許可した場合に、次の情報を Google カレンダーから読み取ります。</p>
+  <ul>
+    <li>カレンダーの一覧（名前、色、権限）</li>
+    <li>予定（名前、日時、場所、説明、繰り返し、通知、Google カレンダーへのリンク）</li>
+  </ul>
+
+  <h3>使い道</h3>
+  <p>読み取った情報は、ウィジェットでの表示と、利用者自身の操作による予定の追加、変更、削除だけに使います。</p>
+
+  <h3>保存する場所</h3>
+  <p>予定の内容はアプリの動作中にメモリで扱い、ファイルには保存しません。接続に使うトークンは、使っている PC の中のアプリの設定フォルダに保存します。</p>
+  <p>このアプリに作者のサーバーはなく、作者が利用者の情報を受け取ることはありません。</p>
+
+  <h3>ほかへの送信</h3>
+  <p>Google カレンダーの情報を Google 以外へ送ることはありません。広告や利用状況の分析の仕組みも入っていません。</p>
+
+  <h3>接続の取り消し</h3>
+  <p><a href="https://myaccount.google.com/permissions">Google アカウントのアクセス権のページ</a>から yuta-desk を削除すると、接続を取り消せます。あわせて、アプリの設定フォルダの <code>google-token.json</code> を削除すると、PC に残ったトークンも消えます。</p>
+
+  <h3>問い合わせ</h3>
+  <p><a href="https://github.com/yutayuta-8e/yuta-desk-share/issues">GitHub の Issues</a> で受け付けます。</p>
+
+  <p class="date">最終更新: 2026年10月31日</p>
+</main>
+</body>
+</html>
